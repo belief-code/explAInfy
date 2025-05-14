@@ -4,9 +4,11 @@
   "description": "",
   "source": "src/index.html",
   "scripts": {
+    "clean": "rimraf dist .parcel-cache",
     "dev": "parcel src/index.html --port 8080",
-    "build": "parcel build src/index.html --dist-dir dist",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npm run clean && parcel build src/index.html --dist-dir dist --public-url /explAInfy/",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "npm run build && gh-pages -d dist"
   },
   "keywords": [],
   "author": "",
@@ -17,9 +19,11 @@
     "eslint": "^9.26.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.4.0",
+    "gh-pages": "^6.3.0",
     "globals": "^16.1.0",
     "parcel": "^2.15.0",
-    "prettier": "^3.5.3"
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1"
   },
   "dependencies": {
     "dompurify": "^3.2.5",
