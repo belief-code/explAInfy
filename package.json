@@ -2,9 +2,10 @@
   "name": "explainfy-project",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "source": "src/index.html",
   "scripts": {
-    "dev": "live-server . --port=8080",
+    "dev": "parcel src/index.html --port 8080",
+    "build": "parcel build src/index.html --dist-dir dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,6 +13,17 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "live-server": "^1.2.2"
+    "@eslint/js": "^9.26.0",
+    "eslint": "^9.26.0",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.4.0",
+    "globals": "^16.1.0",
+    "parcel": "^2.15.0",
+    "prettier": "^3.5.3"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.5",
+    "marked": "^15.0.11",
+    "micromodal": "^0.6.1"
   }
 }

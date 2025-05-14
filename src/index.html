@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ExplAInfy</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <!-- ヘッダー -->
+      <header class="app-header">
+        <a href="#" id="logo-link" class="app-logo-link">
+          <h1 class="app-logo">Expl<span class="ai-red">AI</span>nfy</h1>
+        </a>
+        <img src="./assets/gear-icon.svg" id="setting-button" alt="設定" />
+      </header>
+
+      <!-- ヘッダー下のメイン領域（3カラムの親） -->
+      <div class="app-body-container">
+        <!-- 左サイドバー -->
+        <aside class="sidebar left-sidebar" id="history-sidebar">
+          <h2>履歴</h2>
+          <ul id="history-list">
+            <!-- <li><a href="#">サンプル履歴1</a></li> -->
+            <!-- <li><a href="#">サンプル履歴2</a></li> -->
+          </ul>
+        </aside>
+
+        <!-- 中央コンテンツ表示エリア -->
+        <div class="main-content-column">
+          <!-- メイン画面 -->
+          <section id="url-input-section" class="page-section active">
+            <h1 class="url-input-title">
+              Expl<span class="ai-red">AI</span>nfy
+            </h1>
+            <div class="input-form-container">
+              <textarea
+                id="url-input"
+                class="url-textarea"
+                placeholder="公式ドキュメントのURLを入力"
+                rows="2"
+              ></textarea>
+              <button id="submit-button" class="custom-submit-button">
+                <span class="submit-text">送信</span>
+                <span class="shortcut-key">Ctrl↵</span>
+              </button>
+            </div>
+          </section>
+          <!-- 応答画面 -->
+          <section id="response-section" class="page-section">
+            <div class="response-content-wrapper">
+              <h2>説明結果</h2>
+              <div id="response-output">
+                <!-- ここに説明結果が表示される -->
+              </div>
+            </div>
+            <div class="chat-input-area fixed-bottom-input">
+              <textarea
+                id="additional-question-input"
+                class="url-textarea"
+                placeholder="追加の質問を入力 (Shift+Enterで改行)"
+                rows="1"
+              ></textarea>
+              <button
+                id="submit-additional-question-button"
+                class="custom-submit-button"
+              >
+                <span class="submit-text">送信</span>
+                <span class="shortcut-key">Ctrl↵</span>
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <!-- 右サイドバー -->
+        <aside class="sidebar right-sidebar"></aside>
+      </div>
+    </div>
+
+    <!-- 設定用モーダルウィンドウ -->
+    <div class="modal micromodal-slide" id="modal-settings" aria-hidden="true">
+      <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+        <div
+          class="modal__container"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-settings-title"
+        >
+          <header class="modal__header">
+            <h2 class="modal__title" id="modal-settings-title">設定</h2>
+          </header>
+          <main class="modal__content" id="modal-settings-content">
+            <nav class="modal-tabs">
+              <button
+                class="tab-item active-tab"
+                data-tab-target="#basic-settings-content"
+              >
+                基本設定
+              </button>
+              <button
+                class="tab-item"
+                data-tab-target="#advanced-settings-content"
+              >
+                詳細設定
+              </button>
+            </nav>
+
+            <div
+              id="basic-settings-content"
+              class="tab-content active-tab-content"
+            >
+              <p>
+                <strong>あなたのレベルは？</strong> (1: 完全初学者 〜 5:
+                エキスパート)
+              </p>
+              <div>
+                <label
+                  ><input
+                    type="radio"
+                    name="user-level-radio"
+                    value="1"
+                    checked
+                  />
+                  1</label
+                >
+                <label
+                  ><input type="radio" name="user-level-radio" value="2" />
+                  2</label
+                >
+                <label
+                  ><input type="radio" name="user-level-radio" value="3" />
+                  3</label
+                >
+                <label
+                  ><input type="radio" name="user-level-radio" value="4" />
+                  4</label
+                >
+                <label
+                  ><input type="radio" name="user-level-radio" value="5" />
+                  5</label
+                >
+              </div>
+              <div style="margin-top: 15px">
+                <label for="user-level-text"
+                  >または、あなたのレベル感を文章で説明してください:</label
+                >
+                <textarea
+                  id="user-level-text"
+                  rows="3"
+                  style="width: 98%"
+                ></textarea>
+              </div>
+            </div>
+
+            <div id="advanced-settings-content" class="tab-content">
+              <div>
+                <label for="modal-gemini-api-key-input">Gemini API Key:</label>
+                <input
+                  type="password"
+                  id="modal-gemini-api-key-input"
+                  style="width: 98%"
+                />
+                <p style="font-size: 0.8em; color: #666">
+                  APIキーはブラウザのローカルストレージに保存されます。
+                </p>
+              </div>
+              <div style="margin-top: 15px">
+                <label for="modal-jina-api-key-input"
+                  >Jina AI Reader API Key:</label
+                >
+                <input
+                  type="password"
+                  id="modal-jina-api-key-input"
+                  style="width: 98%"
+                />
+                <p style="font-size: 0.8em; color: #666">
+                  APIキーはブラウザのローカルストレージに保存されます。
+                </p>
+              </div>
+              <div style="margin-top: 15px">
+                <label for="modal-additional-prompt-input"
+                  >追加の指示 (プロンプトに追記):</label
+                >
+                <textarea
+                  id="modal-additional-prompt-input"
+                  rows="3"
+                  maxlength="300"
+                  style="width: 98%"
+                ></textarea>
+                <p style="font-size: 0.8em; color: #666">最大300文字</p>
+              </div>
+            </div>
+          </main>
+          <footer class="modal__footer">
+            <button
+              class="modal__btn modal__btn-primary"
+              id="save-modal-settings-button"
+            >
+              保存
+            </button>
+            <button
+              class="modal__btn"
+              data-micromodal-close
+              aria-label="閉じる"
+            >
+              閉じる
+            </button>
+          </footer>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>

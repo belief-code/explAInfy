@@ -22,3 +22,6 @@ Thumbs.db
 
 # API keys
 .env
+
+# Cache files
+.parcel-cache/
