@@ -27,7 +27,6 @@ export function initializeSettings() {
   if (savedSettingsString) {
     try {
       const savedSettings = JSON.parse(savedSettingsString);
-      // 保存された各キーが存在するか確認しながらマージする方が安全
       currentSettings = { ...defaultSettings, ...savedSettings };
     } catch (e) {
       console.error("Failed to parse settings from localStorage", e);

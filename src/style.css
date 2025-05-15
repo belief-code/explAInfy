@@ -524,3 +524,7 @@ body {
   border-color: #ced4da;
   cursor: not-allowed;
 }
+.required-asterisk {
+  color: red;
+  margin-left: 4px; /* ラベルテキストとの間に少しスペース */
+}
