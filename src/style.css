@@ -1,35 +1,39 @@
 /* 基本的なリセットとページ全体のスタイル */
+:root {
+  --app-header-height: 60px;
+  --sidebar-width: 18%; /* サイドバーの幅 */
+  --response-title-height: auto; /* タイトルは内容に合わせる */
+  --chat-input-area-min-height: 40px; /* 入力エリアの最小高さ */
+}
+
 body {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   margin: 0;
-  background-color: #f6f8fc; /* ページ全体の背景色 */
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+  background-color: #f6f8fc;
   color: #333;
 }
 
 .app-shell {
-  display: flex;
-  flex-direction: column;
-  flex-grow: 1;
-  width: 100%;
+  display: grid; /* Gridコンテナにする */
+  grid-template-rows: var(--app-header-height) 1fr; /* ヘッダー固定高さ、残りがボディ */
+  grid-template-areas: /* エリア名を定義 (任意だが可読性向上) */
+    "appheader"
+    "appbody";
+  height: 100vh; /* ビューポート全体の高さ */
+  width: 100vw; /* ビューポート全体の幅 */
+  overflow: hidden; /* ページ全体のスクロールを防ぐ */
 }
 
 /* ヘッダースタイル */
 .app-header {
+  grid-area: appheader; /* Gridエリア名を割り当て */
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 25px;
-  background-color: #ffffff;
-  border-bottom: 1px solid #e0e0e0;
-  height: 60px;
   box-sizing: border-box;
-  width: 100%;
-  flex-shrink: 0;
 }
 
 .app-logo-link {
@@ -47,7 +51,7 @@ body {
 }
 
 .app-logo .ai-red {
-  color: #cb2431; /* GitHub風の赤色 */
+  color: #cb2431;
 }
 
 #setting-button {
@@ -59,7 +63,6 @@ body {
   padding: 0;
 }
 #setting-button img {
-  /* SVGを直接使う場合、imgタグで囲むなら */
   display: block; /* 余計なスペースを消す */
   width: 100%;
   height: 100%;
@@ -67,26 +70,26 @@ body {
 
 /* メインコンテンツエリアのレイアウト */
 .app-body-container {
-  display: flex;
-  flex-grow: 1;
-  width: 100%;
-  overflow-y: hidden; /* 全体スクロールはさせない */
+  grid-area: appbody; /* Gridエリア名を割り当て */
+  display: grid; /* これもGridコンテナにする */
+  grid-template-columns: var(--sidebar-width) 1fr var(--sidebar-width); /* 左、中央、右 */
+  /* grid-template-rows: 1fr; 暗黙的に1行で、高さは親エリアに依存 */
+  grid-template-areas: "leftsidebar maincontent rightsidebar";
+  overflow: hidden; /* 内部のGridアイテムがはみ出さないように */
+  gap: 0px; /* グリッドアイテム間の隙間 (必要に応じて調整) */
+  background-color: #f6f8fc; /* ボディコンテナの背景色 */
 }
 
 .sidebar {
-  flex-shrink: 0;
   padding: 20px;
-  width: 18%; /* サイドバーの幅 (調整可能) */
-  overflow-y: auto;
-  /* background-color は body から継承 */
+  overflow-y: auto; /* サイドバー内が長くなる場合はスクロール */
 }
 
 .left-sidebar {
-  /* border-right: 1px solid #d1d5da; */ /* 境界線が必要なら復活 */
+  grid-area: leftsidebar;
 }
-
 .right-sidebar {
-  /* border-left: 1px solid #d1d5da; */ /* 境界線が必要なら復活 */
+  grid-area: rightsidebar;
 }
 
 .left-sidebar h2,
@@ -118,37 +121,34 @@ body {
 }
 
 .main-content-column {
-  flex-grow: 1;
+  grid-area: maincontent;
   background-color: #ffffff;
-  min-width: 0; /* flexアイテムが内容に応じて縮むのを許可 */
+  min-width: 0;
   display: flex;
-  flex-direction: column; /* 子要素(.page-section)を縦に積む */
-  border-radius: 8px; /* 四隅を丸く */
-  margin: 20px 0; /* 上下にマージン (左右はサイドバーとの間で調整) */
-  /* box-shadow: 0 1px 3px rgba(27,31,35,0.1); */ /* 軽い影 */
-  overflow: hidden; /* 子要素がはみ出さないようにし、内側でスクロール */
+  flex-direction: column;
+  padding: 20px 20px 5px 20px; /* 内側の余白 */
+  overflow: hidden; /* 子要素がはみ出さないように */
+  margin-bottom: 5px;
+  border-radius: 15px;
 }
 
 /* ページセクションの基本スタイル */
 .page-section {
-  display: none; /* 初期は非表示 */
+  display: none;
   width: 100%;
   box-sizing: border-box;
-  flex-grow: 1; /* .main-content-column の中で高さを取る */
+  flex-grow: 1;
 }
 .page-section.active {
-  display: block; /* アクティブなセクションを表示 */
+  display: flex;
+  flex-direction: column; /* 子要素を縦に積む */
 }
 
 /* URL入力画面のスタイル */
 #url-input-section.active {
-  /* .active がついた時だけ中央寄せなどのスタイルを適用 */
-  display: flex;
-  flex-direction: column;
-  align-items: center; /* フォームを中央に */
-  justify-content: center; /* フォームを垂直方向にも中央に */
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 20px;
 }
 
 .url-input-title {
@@ -179,7 +179,8 @@ body {
   line-height: 1.5;
   box-sizing: border-box;
   resize: none;
-  overflow-y: hidden;
+  overflow-y: auto;
+  max-height: 12em;
   transition:
     border-radius 0.2s ease-in-out,
     box-shadow 0.2s ease-in-out;
@@ -188,9 +189,6 @@ body {
   outline: none;
   border-color: #0366d6;
   box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.3);
-}
-.url-textarea.expanded {
-  border-radius: 18px;
 }
 
 /* 送信ボタンの共通スタイル */
@@ -234,53 +232,47 @@ body {
 
 /* 応答画面のスタイル */
 #response-section.active {
-  display: flex !important; /* display: flex を確実に適用 */
-  flex-direction: column;
-  height: 100%; /* .main-content-column 内で利用可能な高さいっぱい */
-  padding: 0; /* response-section自体のpaddingは不要に */
+  overflow: hidden;
 }
 
 .response-content-wrapper {
-  flex-grow: 1;
-  overflow-y: auto;
-  padding: 20px 30px; /* 応答内容の周囲の余白 */
+  flex-grow: 1; /* 残りのスペースを最大限使う */
+  overflow-y: auto; /* ここがスクロールする */
+  padding-bottom: 10px; /* 下の入力欄との間に少し余白 */
+  min-height: 0;
 }
 #response-section h2 {
-  /* "説明結果" のタイトル */
-  margin-top: 0;
-  font-size: 1.6em;
-  color: #24292e;
+  /* タイトル部分 */
+  margin: 0 0 20px 0; /* 上マージンを0に、下マージンを調整 */
   padding-bottom: 10px;
   border-bottom: 1px solid #e1e4e8;
-  margin-bottom: 20px;
+  font-size: 1.6em;
+  color: #24292e;
+  flex-shrink: 0; /* 縮まない */
 }
 
 .fixed-bottom-input {
-  position: relative; /* 送信ボタンのため */
-  display: flex;
-  align-items: flex-end; /* テキストエリアが複数行になったときもボタンの位置を合わせる */
-  padding: 12px 20px;
-  border-top: 1px solid #e1e4e8;
-  background-color: #f6f8fc; /* 入力エリアの背景を少し変える (任意) */
+  /* チャット入力エリア */
   flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 6px 0; /* 左右のpaddingは .main-content-column に任せる */
+  min-height: var(--chat-input-area-min-height); /* 最小高さを保証 */
 }
 
 #additional-question-input.url-textarea {
   /* メインページのスタイルを継承 */
   flex-grow: 1;
-  min-height: calc(1.5em * 1 + 22px); /* 1行分の初期高さ */
+  min-height: calc(1.5em * 2 + 22px); /* 2行分の初期高さ */
   border-radius: 22px; /* 高さに合わせて調整 */
   margin-right: 10px;
+  margin-left: 10px;
   padding-right: 50px; /* 送信ボタンのスペース */
-}
-#additional-question-input.url-textarea.expanded {
-  border-radius: 15px;
 }
 
 /* 応答画面の送信ボタン位置 */
 #response-section .custom-submit-button {
-  /* position: absolute; は使わない */
-  /* flexアイテムとして配置される */
   margin-left: auto; /* 右寄せにする場合 (またはtextareaがflex-growなので不要かも) */
   position: absolute; /* やっぱりabsoluteの方が制御しやすいかも */
   right: 28px; /* fixed-bottom-input の padding を考慮 */
@@ -289,9 +281,7 @@ body {
 
 /* マークダウン表示用スタイル */
 #response-output {
-  max-width: 100%; /* コンテンツ幅いっぱいに */
-  margin-left: 0; /* 中央寄せ解除 */
-  margin-right: 0;
+  max-width: 100%;
 }
 #response-output h1, /* マークダウン内のh1-h6 */
 #response-output h2,
@@ -399,11 +389,11 @@ body {
 }
 
 .modal {
-  display: none; /* ★ 初期状態は非表示。これが効いていない可能性がある */
+  display: none;
 }
 
 .modal.is-open {
-  display: block; /* ★ Micromodalがこのクラスを付けて表示する */
+  display: block; /* Micromodalがこのクラスを付けて表示する */
   /* または display: flex; (overlayで中央寄せする場合) */
 }
 
@@ -414,7 +404,7 @@ body {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.6); /* 背景のオーバーレイ */
-  display: flex; /* ★ これが効いていないと中央に来ない */
+  display: flex; /* これが効いていないと中央に来ない */
   justify-content: center;
   align-items: center;
   z-index: 1000; /* 他の要素より手前に */
@@ -429,7 +419,7 @@ body {
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   overflow-y: auto;
   max-height: 90vh;
-  /* ★ z-index や position が他の要素との関係で問題を起こしていないか確認 */
+  /* z-index や position が他の要素との関係で問題を起こしていないか確認 */
 }
 /* モーダル内のタブスタイル */
 .modal-tabs {
@@ -461,12 +451,12 @@ body {
 
 .tab-content {
   /* タブのコンテンツエリア */
-  display: none; /* ★ 初期状態は非表示 */
+  display: none; /* 初期状態は非表示 */
   padding: 15px 0;
 }
 .tab-content.active-tab-content {
   /* アクティブなタブコンテンツのスタイル */
-  display: block; /* ★ アクティブなものだけ表示 */
+  display: block; /* アクティブなものだけ表示 */
 }
 
 /* モーダルウィンドウのフッターとボタンスタイル */
@@ -478,11 +468,11 @@ body {
 }
 
 .modal__btn {
-  padding: 10px 20px; /* ★ ボタン内の上下左右の余白を十分に取る */
-  border-radius: 6px; /* ★ 適度な角丸 */
-  border: 1px solid transparent; /* ★ 枠線は最初は透明か、背景色に合わせる */
-  background-color: #f0f0f0; /* ★ デフォルトの背景色 (やや明るいグレー) */
-  color: #333; /* ★ デフォルトの文字色 */
+  padding: 10px 20px; /* ボタン内の上下左右の余白を十分に取る */
+  border-radius: 6px; /* 適度な角丸 */
+  border: 1px solid transparent; /* 枠線は最初は透明か、背景色に合わせる */
+  background-color: #f0f0f0; /* デフォルトの背景色 (やや明るいグレー) */
+  color: #333; /* デフォルトの文字色 */
   font-size: 0.95em; /* フォントサイズ */
   font-weight: 500; /* 少し太字 */
   cursor: pointer;
@@ -510,8 +500,8 @@ body {
 
 /* プライマリボタン (例: 保存ボタン) のスタイル */
 .modal__btn-primary {
-  background-color: #007bff; /* ★ プライマリボタンの背景色 (青) */
-  color: white; /* ★ プライマリボタンの文字色 (白) */
+  background-color: #007bff; /* プライマリボタンの背景色 (青) */
+  color: white; /* プライマリボタンの文字色 (白) */
   border-color: #007bff; /* 枠線も同色 */
 }
 
