@@ -6,7 +6,7 @@ import MicroModal from "micromodal";
 let JINA_API_KEY = "";
 let GEMINI_API_KEY = "";
 const DEFAULT_SUMMARY_PROMPT =
-  "この記事の内容を、見出し、リスト、太字などを使ったマークダウン形式で、日本語で要点をまとめてください。";
+  "以下のユーザーレベルと指示に従い、マークダウン形式で回答のみを生成してください。前置きや定型的な挨拶は不要です。";
 const GEMINI_MODEL = "gemini-2.5-flash-preview-04-17";
 const SETTINGS_STORAGE_KEY = "explaInfySettings";
 
@@ -14,7 +14,6 @@ const SETTINGS_STORAGE_KEY = "explaInfySettings";
 // 主要なセクション
 const urlInputSection = document.getElementById("url-input-section");
 const responseSection = document.getElementById("response-section");
-// const settingsSection = document.getElementById("settings-section"); // メインページ内の設定セクションは不要になったのでコメントアウト
 
 // URL入力関連
 const urlTextarea = document.getElementById("url-input");
@@ -62,7 +61,7 @@ const historyList = document.getElementById("history-list");
 document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
   initializeModal();
-  initializeTextareaAutoHeight(urlTextarea, 2);
+  initializeTextareaAutoHeight(urlTextarea, 1);
   initializeTextareaAutoHeight(additionalQuestionTextarea, 1);
   setupEventListeners();
   showPage(urlInputSection); // 初期表示
@@ -123,21 +122,30 @@ function setupEventListeners() {
   if (submitButton && urlTextarea) {
     submitButton.addEventListener("click", handleSubmit);
     urlTextarea.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        submitButton.click();
+      // Ctrl + Enter (または Meta + Enter for Mac) で送信
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault(); // デフォルトのEnterキーの動作（改行）をキャンセル
+        submitButton.click(); // 送信ボタンのクリックイベントを発火
       }
+      // Enterキー単独の場合は、デフォルトの改行動作を許可するため、ここでは何もしない
     });
   }
 
   if (submitAdditionalQuestionButton && additionalQuestionTextarea) {
-    // submitAdditionalQuestionButton.addEventListener('click', handleAdditionalQuestion); // 後で実装
     additionalQuestionTextarea.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
+      // Ctrl + Enter (または Meta + Enter for Mac) で送信
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
-        // submitAdditionalQuestionButton.click(); // 後で実装
+        // submitAdditionalQuestionButton.click(); // 追加質問の送信処理 (後で実装)
+        console.log(
+          "追加質問送信 (Ctrl+Enter):",
+          additionalQuestionTextarea.value
+        ); // 仮の処理
+        // ここで handleAdditionalQuestion() のような関数を呼び出す
       }
+      // Enterキー単独の場合は、デフォルトの改行動作を許可
     });
+    // submitAdditionalQuestionButton.addEventListener('click', handleAdditionalQuestion); // 後で実装
   }
 
   modalTabs.forEach((tab) => {
@@ -184,11 +192,15 @@ async function handleSubmit() {
   showPage(responseSection);
 
   try {
-    const articleContent = await fetchArticleContent(urlToProcess);
-    if (!articleContent) {
+    const articleData = await fetchArticleContent(urlToProcess);
+    if (!articleData || !articleData.content) {
       responseOutput.innerHTML = "<p>記事の本文を取得できませんでした。</p>";
       return;
     }
+    const articleContent = articleData.content;
+    const articleTitle = articleData.title || "説明結果"; // titleがなければデフォルト
+
+    document.querySelector("#response-section h2").textContent = articleTitle; // タイトルを設定
     const markdownSummary = await summarizeTextWithGemini(articleContent);
     if (markdownSummary) {
       const dirtyHtml = marked.parse(markdownSummary);
@@ -233,7 +245,7 @@ async function fetchArticleContent(url) {
   // 通常、data.data.content や data.content などに本文が含まれるはず
   // ここでは仮に data.data.content とする
   if (data && data.data && data.data.content) {
-    return data.data.content;
+    return data.data;
   } else {
     console.warn("Jina API did not return expected content structure.");
     return null; // または適切なエラー処理
