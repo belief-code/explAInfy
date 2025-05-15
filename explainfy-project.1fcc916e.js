@@ -667,65 +667,752 @@ function hmrAccept(bundle /*: ParcelRequire */ , id /*: string */ ) {
 }
 
 },{}],"fILKw":[function(require,module,exports,__globalThis) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-var _dompurify = require("dompurify");
-var _dompurifyDefault = parcelHelpers.interopDefault(_dompurify);
-var _marked = require("marked");
-var _micromodal = require("micromodal");
-var _micromodalDefault = parcelHelpers.interopDefault(_micromodal);
+var _apiJs = require("./api.js");
+var _dbJs = require("./db.js");
 var _settingsJs = require("./settings.js");
-// --- グローバル変数・定数 ---
-const DEFAULT_SUMMARY_PROMPT = "\u4EE5\u4E0B\u306E\u30E6\u30FC\u30B6\u30FC\u30EC\u30D9\u30EB\u3068\u6307\u793A\u306B\u5F93\u3044\u3001\u30DE\u30FC\u30AF\u30C0\u30A6\u30F3\u5F62\u5F0F\u3067\u56DE\u7B54\u306E\u307F\u3092\u751F\u6210\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u524D\u7F6E\u304D\u3084\u5B9A\u578B\u7684\u306A\u6328\u62F6\u306F\u4E0D\u8981\u3067\u3059\u3002";
-const GEMINI_MODEL = "gemini-2.5-flash-preview-04-17";
+var _uiJs = require("./ui.js");
 // --- DOM要素のキャッシュ (ページロード時に一度だけ取得) ---
 // 主要なセクション
 const urlInputSection = document.getElementById("url-input-section");
-const responseSection = document.getElementById("response-section");
+const historyListElement = document.getElementById("history-list");
 // URL入力関連
 const urlTextarea = document.getElementById("url-input");
 const submitButton = document.getElementById("submit-button");
 // 応答関連
-const responseOutput = document.getElementById("response-output");
 const additionalQuestionTextarea = document.getElementById("additional-question-input");
 const submitAdditionalQuestionButton = document.getElementById("submit-additional-question-button");
 // ヘッダー関連
 const logoLink = document.getElementById("logo-link");
 const settingButton = document.getElementById("setting-button");
 // モーダル関連
-const modalGeminiApiKeyInput = document.getElementById("modal-gemini-api-key-input");
-const modalJinaApiKeyInput = document.getElementById("modal-jina-api-key-input");
 const saveModalSettingsButton = document.getElementById("save-modal-settings-button");
-const modalUserLevelRadios = document.querySelectorAll('input[name="user-level-radio"]');
-const modalUserLevelText = document.getElementById("user-level-text");
-const modalAdditionalPromptInput = document.getElementById(// IDを変更 (追加質問とモーダル内のものとを区別)
-"modal-additional-prompt-input");
 const modalTabs = document.querySelectorAll(".modal-tabs .tab-item");
 const tabContents = document.querySelectorAll(".modal__content .tab-content");
-// モーダルの設定関連やり取り用のオブジェクト
-const modalFormElements = {
-    modalGeminiApiKeyInput,
-    modalJinaApiKeyInput,
-    modalUserLevelRadios,
-    modalUserLevelText,
-    modalAdditionalPromptInput
-};
+let currentActiveSessionId = null;
+let currentTurns = []; //現在の会話のターンを保持する配列
 // --- 初期化処理 ---
-document.addEventListener("DOMContentLoaded", ()=>{
-    initializeModal();
-    initializeTextareaAutoHeight(urlTextarea, 1);
-    initializeTextareaAutoHeight(additionalQuestionTextarea, 1);
+document.addEventListener("DOMContentLoaded", async ()=>{
+    (0, _settingsJs.initializeSettings)(); // settings.js の初期化を呼ぶ
+    _uiJs.initializeUI(); // ui.js のUI初期化を呼ぶ
+    _uiJs.initializeTextareaAutoHeight(urlTextarea, 1);
+    _uiJs.initializeTextareaAutoHeight(document.getElementById("additional-question-input"), 1);
+    await updateAndRenderHistory();
     setupEventListeners();
-    showPage(urlInputSection); // 初期表示
+    _uiJs.showPage(urlInputSection); // 初期表示
+    if (!(0, _settingsJs.getApiKey)("jina") || !(0, _settingsJs.getApiKey)("gemini")) {
+        alert("API\u30AD\u30FC\u304C\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002\u8A2D\u5B9A\u753B\u9762\u3092\u958B\u304D\u307E\u3059\u3002");
+        _uiJs.populateModalFormWithSettings((0, _settingsJs.getSettings)()); // 現在の設定をモーダルに反映
+        _uiJs.openSettingsModal();
+    }
 });
 // --- 関数定義 ---
+function setupEventListeners() {
+    if (settingButton) settingButton.addEventListener("click", ()=>{
+        _uiJs.populateModalFormWithSettings((0, _settingsJs.getSettings)());
+        _uiJs.openSettingsModal();
+    });
+    if (saveModalSettingsButton) saveModalSettingsButton.addEventListener("click", handleSaveSettings);
+    if (logoLink) logoLink.addEventListener("click", (event)=>{
+        event.preventDefault();
+        _uiJs.showPage(urlInputSection);
+    });
+    if (historyListElement) historyListElement.addEventListener("click", async (event)=>{
+        const link = event.target.closest("a[data-session-id]");
+        if (!link) return;
+        event.preventDefault();
+        const sessionId = link.dataset.sessionId;
+        if (!sessionId) return;
+        _uiJs.displayLoadingMessage("<p>\u5C65\u6B74\u3092\u8AAD\u307F\u8FBC\u3093\u3067\u3044\u307E\u3059...</p>"); // ローディング表示
+        _uiJs.showPage(document.getElementById("response-section")); // 先に応答画面に切り替え
+        try {
+            const sessionData = await _dbJs.getSession(sessionId);
+            if (sessionData && sessionData.turns) {
+                currentActiveSessionId = sessionId;
+                currentTurns = sessionData.turns;
+                _uiJs.renderConversationTurns(currentTurns);
+                _uiJs.updateResponseTitle(sessionData.originalTitle || "\u8AAC\u660E\u7D50\u679C");
+            } else {
+                _uiJs.displayErrorMessage("\u9078\u629E\u3055\u308C\u305F\u5C65\u6B74\u306E\u8AAD\u307F\u8FBC\u307F\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+                currentActiveSessionId = null;
+                currentTurns = [];
+            }
+        } catch (error) {
+            console.error("\u5C65\u6B74\u306E\u8AAD\u307F\u8FBC\u307F\u4E2D\u306B\u30A8\u30E9\u30FC:", error);
+            _uiJs.displayErrorMessage("\u5C65\u6B74\u306E\u8AAD\u307F\u8FBC\u307F\u4E2D\u306B\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002");
+            currentActiveSessionId = null;
+            currentTurns = [];
+        }
+    });
+    if (submitButton && urlTextarea) {
+        submitButton.addEventListener("click", handleSubmit);
+        urlTextarea.addEventListener("keydown", (event)=>{
+            // Ctrl + Enter (または Meta + Enter for Mac) で送信
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault(); // デフォルトのEnterキーの動作（改行）をキャンセル
+                submitButton.click(); // 送信ボタンのクリックイベントを発火
+            }
+        });
+    }
+    if (submitAdditionalQuestionButton && additionalQuestionTextarea) {
+        submitAdditionalQuestionButton.addEventListener("click", handleAdditionalQuestion);
+        additionalQuestionTextarea.addEventListener("keydown", (event)=>{
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                handleAdditionalQuestion(); // Ctrl+Enterでも同じ関数を呼ぶ
+            }
+        });
+    }
+    modalTabs.forEach((tab)=>{
+        tab.addEventListener("click", ()=>{
+            modalTabs.forEach((t)=>t.classList.remove("active-tab"));
+            tabContents.forEach((c)=>c.classList.remove("active-tab-content"));
+            tab.classList.add("active-tab");
+            const targetContentId = tab.dataset.tabTarget;
+            document.querySelector(targetContentId).classList.add("active-tab-content");
+        });
+    });
+}
+async function updateAndRenderHistory() {
+    try {
+        const summaries = await _dbJs.getAllSessionSummaries();
+        _uiJs.renderHistoryList(summaries);
+    } catch (error) {
+        console.error("\u5C65\u6B74\u306E\u53D6\u5F97\u307E\u305F\u306F\u8868\u793A\u306B\u5931\u6557\u3057\u307E\u3057\u305F:", error);
+    // ui.renderHistoryList([]); // 空のリストを表示するなどのフォールバック
+    }
+}
+async function handleSubmit() {
+    if (!(0, _settingsJs.getApiKey)("jina") || !(0, _settingsJs.getApiKey)("gemini")) {
+        alert("API\u30AD\u30FC\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
+        _uiJs.populateModalFormWithSettings((0, _settingsJs.getSettings)());
+        _uiJs.openSettingsModal();
+        return;
+    }
+    const urlToProcess = urlTextarea.value.trim();
+    if (!urlToProcess) {
+        alert("URL\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+        return;
+    }
+    _uiJs.displayLoadingMessage();
+    _uiJs.showPage(document.getElementById("response-section"));
+    const newSessionId = crypto.randomUUID(); // UUIDを生成
+    currentActiveSessionId = newSessionId; // 現在のセッションIDとして保持 (main.js内の変数)
+    try {
+        const userSettings = (0, _settingsJs.getSettings)();
+        const summaryResult = await _apiJs.getDocumentSummary(urlToProcess, userSettings);
+        if (summaryResult.error) _uiJs.displayErrorMessage(summaryResult.error);
+        else {
+            _uiJs.updateResponseTitle(summaryResult.title || "\u8AAC\u660E\u7D50\u679C");
+            const userTurnContent = summaryResult.actualPromptSentToLLM || `\u{30C9}\u{30AD}\u{30E5}\u{30E1}\u{30F3}\u{30C8}: ${urlToProcess} \u{306E}\u{8AAC}\u{660E}\u{3092}\u{4F9D}\u{983C}`;
+            const modelTurnContent = summaryResult.summaryMarkdown;
+            currentTurns = [
+                {
+                    role: "user",
+                    parts: [
+                        {
+                            text: userTurnContent
+                        }
+                    ]
+                },
+                {
+                    role: "model",
+                    parts: [
+                        {
+                            text: modelTurnContent
+                        }
+                    ]
+                }
+            ];
+            const sessionData = {
+                id: currentActiveSessionId,
+                originalUrl: urlToProcess,
+                originalTitle: summaryResult.title,
+                createdAt: Date.now(),
+                turns: currentTurns
+            };
+            await _dbJs.saveOrUpdateSession(sessionData);
+            _uiJs.renderConversationTurns(currentTurns); // UIにも反映
+            await updateAndRenderHistory();
+        }
+    } catch (error) {
+        console.error("getDocumentSummary \u547C\u3073\u51FA\u3057\u4E2D\u306B\u30A8\u30E9\u30FC:", error);
+        _uiJs.displayErrorMessage("\u4E88\u671F\u305B\u306C\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002");
+    }
+}
+function handleSaveSettings() {
+    const newSettings = _uiJs.getSettingsFromModalForm();
+    if (newSettings) {
+        (0, _settingsJs.saveSettings)(newSettings);
+        alert("\u8A2D\u5B9A\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002");
+        // APIキーが保存されたかどうかの再チェックとUIへのフィードバック
+        if (!(0, _settingsJs.getApiKey)("jina") || !(0, _settingsJs.getApiKey)("gemini")) {
+            alert("API\u30AD\u30FC\u304C\u307E\u3060\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002\u4E00\u90E8\u6A5F\u80FD\u304C\u5229\u7528\u3067\u304D\u307E\u305B\u3093\u3002");
+            _uiJs.highlightEmptyApiKeysInModal();
+            return;
+        } else _uiJs.clearApiKeyErrorStylesInModal();
+    } else // getSettingsFromModalForm で問題があった場合 (通常は起こらないはず)
+    console.error("\u30E2\u30FC\u30C0\u30EB\u304B\u3089\u306E\u8A2D\u5B9A\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+    _uiJs.closeSettingsModal();
+}
+async function handleAdditionalQuestion() {
+    if (!currentActiveSessionId) {
+        alert("\u307E\u305A\u6700\u521D\u306E\u8CEA\u554F\u3092\u884C\u3046\u304B\u3001\u5C65\u6B74\u304B\u3089\u4F1A\u8A71\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+        return;
+    }
+    const newQuestionText = additionalQuestionTextarea.value.trim();
+    if (!newQuestionText) {
+        alert("\u8FFD\u52A0\u306E\u8CEA\u554F\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+        return;
+    }
+    if (!(0, _settingsJs.getApiKey)("gemini")) {
+        // Jinaはここでは不要
+        alert("Gemini API\u30AD\u30FC\u304C\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002");
+        _uiJs.populateModalFormWithSettings((0, _settingsJs.getSettings)());
+        _uiJs.openSettingsModal();
+        return;
+    }
+    // UIにユーザーの質問を即時反映 (送信中であることが分かるように)
+    const userTurnForUI = {
+        role: "user",
+        parts: [
+            {
+                text: newQuestionText
+            }
+        ],
+        timestamp: Date.now()
+    };
+    currentTurns.push(userTurnForUI);
+    _uiJs.renderConversationTurns(currentTurns); // 新しい質問をUIに追加
+    additionalQuestionTextarea.value = ""; // 入力欄クリア
+    _uiJs.displayLoadingMessage("<p>AI\u304C\u5FDC\u7B54\u3092\u8003\u3048\u3066\u3044\u307E\u3059...</p>"); // ローディング表示を応答エリアの末尾に
+    try {
+        const userSettings = (0, _settingsJs.getSettings)();
+        // APIに渡す履歴からはtimestampを除く
+        const historyForApi = currentTurns.slice(0, -1).map((turn)=>({
+                // 最後に追加したUI用ユーザーターンを除く
+                role: turn.role,
+                parts: turn.parts.map((p)=>({
+                        text: p.text
+                    }))
+            }));
+        const result = await _apiJs.getFollowUpResponse(historyForApi, newQuestionText, userSettings);
+        if (result.error) {
+            _uiJs.displayErrorMessage(result.error);
+            currentTurns.pop(); // 送信失敗したのでUIからユーザーの質問を削除 (またはエラー表示に置き換える)
+            _uiJs.renderConversationTurns(currentTurns); // UI更新
+        } else {
+            const modelTurnForStorage = {
+                role: "model",
+                parts: [
+                    {
+                        text: result.modelResponseMarkdown
+                    }
+                ],
+                timestamp: Date.now()
+            };
+            // currentTurns の最後の要素 (UIに表示したユーザーの質問) の後にモデルの応答を追加
+            // currentTurns.pop(); // UI用に追加したユーザーの質問を一度削除し、API応答と一緒にDB保存用の形式で再追加する
+            // 上記だとtimestampがずれるので、メモリ上のcurrentTurnsはそのままにして、
+            // DB保存時はAPIに送ったnewQuestionTextとAPIからの応答をペアにする
+            currentTurns[currentTurns.length - 1] = {
+                // 最後にUIに追加したユーザーの質問を更新(timestampはそのまま)
+                role: "user",
+                parts: [
+                    {
+                        text: newQuestionText
+                    }
+                ],
+                timestamp: userTurnForUI.timestamp
+            };
+            currentTurns.push(modelTurnForStorage);
+            // DBに保存
+            const sessionToUpdate = await _dbJs.getSession(currentActiveSessionId);
+            if (sessionToUpdate) {
+                sessionToUpdate.turns = currentTurns.map((turn)=>({
+                        // DB保存用にはtimestampを含める
+                        role: turn.role,
+                        parts: turn.parts,
+                        timestamp: turn.timestamp || Date.now()
+                    }));
+                await _dbJs.saveOrUpdateSession(sessionToUpdate);
+            }
+            _uiJs.renderConversationTurns(currentTurns); // 全体を再描画
+            await updateAndRenderHistory(); // 履歴リストも更新
+        }
+    } catch (error) {
+        console.error("\u8FFD\u52A0\u8CEA\u554F\u51E6\u7406\u4E2D\u306B\u30A8\u30E9\u30FC:", error);
+        _uiJs.displayErrorMessage("\u8FFD\u52A0\u8CEA\u554F\u306E\u51E6\u7406\u4E2D\u306B\u4E88\u671F\u305B\u306C\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002");
+    // 必要なら currentTurns から最後のユーザー質問を削除
+    } finally{
+    // ローディング解除 (エラーでも成功でも responseOutput は上書きされるので不要かも)
+    }
+}
+
+},{"./api.js":"38UJz","./settings.js":"1miDW","./ui.js":"4OwKy","./db.js":"jkmVr"}],"38UJz":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+/**
+ * 指定されたURLのドキュメント内容を取得し、ユーザー設定に基づいて要約を生成する。
+ * @param {string} url - 要約対象のドキュメントURL
+ * @param {object} userSettings - ユーザー設定オブジェクト (settings.jsから取得したもの)
+ * @returns {Promise<object>} { title?: string, summaryMarkdown?: string, error?: string } 形式のオブジェクト
+ */ parcelHelpers.export(exports, "getDocumentSummary", ()=>getDocumentSummary);
+parcelHelpers.export(exports, "getFollowUpResponse", ()=>getFollowUpResponse);
+var _settingsJs = require("./settings.js");
+const GEMINI_MODEL = "gemini-2.5-flash-preview-04-17";
+const DEFAULT_SYSTEM_PROMPT_PARTS = [
+    // システム側の固定指示を配列で管理
+    "\u3042\u306A\u305F\u306F\u516C\u5F0F\u30C9\u30AD\u30E5\u30E1\u30F3\u30C8\u306E\u5185\u5BB9\u3092\u89E3\u8AAC\u3059\u308B\u5C02\u9580\u5BB6\u3067\u3059\u3002",
+    "\u30E6\u30FC\u30B6\u30FC\u306E\u30EC\u30D9\u30EB\u3084\u8FFD\u52A0\u306E\u6307\u793A\u306B\u5408\u308F\u305B\u3066\u3001\u63D0\u4F9B\u3055\u308C\u305F\u30C9\u30AD\u30E5\u30E1\u30F3\u30C8\u306E\u672C\u6587\u3092\u8AAC\u660E\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    "\u56DE\u7B54\u306F\u30DE\u30FC\u30AF\u30C0\u30A6\u30F3\u5F62\u5F0F\u3067\u3001\u898B\u51FA\u3057\u3001\u30EA\u30B9\u30C8\u3001\u592A\u5B57\u306A\u3069\u3092\u52B9\u679C\u7684\u306B\u4F7F\u7528\u3057\u3001\u69CB\u9020\u7684\u306B\u5206\u304B\u308A\u3084\u3059\u304F\u8A18\u8FF0\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    "\u56DE\u7B54\u306B\u306F\u3001\u524D\u7F6E\u304D\u3084\u5B9A\u578B\u7684\u306A\u6328\u62F6\u3001\u611F\u8B1D\u306E\u8A00\u8449\u306A\u3069\u306F\u4E00\u5207\u542B\u3081\u305A\u3001\u8AAC\u660E\u5185\u5BB9\u306E\u307F\u3092\u51FA\u529B\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+];
+async function fetchArticleContentInternal(url, jinaApiKey) {
+    if (!jinaApiKey) return {
+        error: "Jina API\u30AD\u30FC\u304C\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002"
+    };
+    const readerApiUrl = `https://r.jina.ai/${url}`;
+    try {
+        const response = await fetch(readerApiUrl, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${jinaApiKey}`,
+                Accept: "application/json"
+            }
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(()=>({
+                    message: response.statusText
+                }));
+            return {
+                error: `Jina API\u{304B}\u{3089}\u{306E}\u{30B3}\u{30F3}\u{30C6}\u{30F3}\u{30C4}\u{53D6}\u{5F97}\u{306B}\u{5931}\u{6557}\u{3057}\u{307E}\u{3057}\u{305F}: ${errorData.message || response.status}`
+            };
+        }
+        const data = await response.json();
+        if (data && data.data && data.data.content) return {
+            content: data.data.content,
+            title: data.data.title || null
+        };
+        return {
+            error: "Jina API\u304C\u671F\u5F85\u3055\u308C\u308B\u30B3\u30F3\u30C6\u30F3\u30C4\u69CB\u9020\u3092\u8FD4\u3057\u307E\u305B\u3093\u3067\u3057\u305F\u3002"
+        };
+    } catch (e) {
+        console.error("fetchArticleContentInternal error:", e);
+        return {
+            error: "\u8A18\u4E8B\u30B3\u30F3\u30C6\u30F3\u30C4\u306E\u53D6\u5F97\u4E2D\u306B\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002"
+        };
+    }
+}
+async function generateSummaryWithGeminiInternal(textToSummarize, userSettings, geminiApiKey) {
+    // internal
+    if (!geminiApiKey) return {
+        error: "Gemini API\u30AD\u30FC\u304C\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002"
+    };
+    // --- ここでプロンプトエンジニアリングを行う ---
+    let promptParts = [
+        ...DEFAULT_SYSTEM_PROMPT_PARTS
+    ];
+    // ユーザーレベルに応じた指示を追加
+    if (userSettings.userLevel) {
+        let levelDescription = "";
+        switch(userSettings.userLevel){
+            case 1:
+                levelDescription = "\u5BFE\u8C61\u8AAD\u8005\u306F\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u5B8C\u5168\u521D\u5B66\u8005\u3067\u3059\u3002\u5C02\u9580\u7528\u8A9E\u306F\u907F\u3051\u3001\u975E\u5E38\u306B\u57FA\u672C\u7684\u306A\u6982\u5FF5\u304B\u3089\u4E01\u5BE7\u306B\u8AAC\u660E\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+                break;
+            case 2:
+                levelDescription = "\u5BFE\u8C61\u8AAD\u8005\u306F\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u521D\u5B66\u8005\u3067\u3059\u3002\u57FA\u672C\u7684\u306A\u7528\u8A9E\u306F\u4F7F\u3063\u3066\u3082\u826F\u3044\u3067\u3059\u304C\u3001\u5E73\u6613\u306A\u8A00\u8449\u3067\u8AAC\u660E\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+                break;
+            case 3:
+                levelDescription = "\u5BFE\u8C61\u8AAD\u8005\u306F\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u4E2D\u7D1A\u8005\u3067\u3059\u3002\u3042\u308B\u7A0B\u5EA6\u306E\u5C02\u9580\u7528\u8A9E\u3084\u62BD\u8C61\u7684\u306A\u6982\u5FF5\u3082\u7406\u89E3\u3067\u304D\u307E\u3059\u3002";
+                break;
+            case 4:
+                levelDescription = "\u5BFE\u8C61\u8AAD\u8005\u306F\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u4E0A\u7D1A\u8005\u3067\u3059\u3002\u7C21\u6F54\u304B\u3064\u6280\u8853\u7684\u306B\u6B63\u78BA\u306A\u8AAC\u660E\u3092\u597D\u307F\u307E\u3059\u3002";
+                break;
+            case 5:
+                levelDescription = "\u5BFE\u8C61\u8AAD\u8005\u306F\u975E\u5E38\u306B\u7D4C\u9A13\u8C4A\u5BCC\u306A\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u30A8\u30AD\u30B9\u30D1\u30FC\u30C8\u3067\u3059\u3002\u8A73\u7D30\u306A\u6280\u8853\u7684\u80CC\u666F\u3084\u30CB\u30E5\u30A2\u30F3\u30B9\u307E\u3067\u8E0F\u307F\u8FBC\u3093\u3060\u8AAC\u660E\u3092\u671F\u5F85\u3057\u3066\u3044\u307E\u3059\u3002";
+                break;
+        }
+        if (levelDescription) promptParts.push(levelDescription);
+    }
+    if (userSettings.userLevelText) // ユーザーの自由記述レベルは、そのままLLMに伝える情報として追加
+    // ここでサニタイズやバリデーションをかけることも検討できる
+    promptParts.push(`\u{30E6}\u{30FC}\u{30B6}\u{30FC}\u{304B}\u{3089}\u{306E}\u{88DC}\u{8DB3}\u{60C5}\u{5831}\u{FF08}\u{30EC}\u{30D9}\u{30EB}\u{611F}\u{306A}\u{3069}\u{FF09}: \u{300C}${userSettings.userLevelText}\u{300D}`);
+    // 追加の指示
+    if (userSettings.additionalPrompt) // こちらもサニタイズやバリデーションを検討
+    promptParts.push(`\u{30E6}\u{30FC}\u{30B6}\u{30FC}\u{304B}\u{3089}\u{306E}\u{8FFD}\u{52A0}\u{306E}\u{6307}\u{793A}: \u{300C}${userSettings.additionalPrompt}\u{300D}`);
+    promptParts.push("\n--- \u30C9\u30AD\u30E5\u30E1\u30F3\u30C8\u672C\u6587 ---");
+    promptParts.push(textToSummarize);
+    promptParts.push("--- \u8AAC\u660E\u958B\u59CB ---");
+    const finalPrompt = promptParts.join("\n");
+    console.log("Final prompt to Gemini:", finalPrompt); // デバッグ用
+    // --- Gemini API 呼び出し ---
+    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+    const requestBody = {
+        contents: [
+            {
+                parts: [
+                    {
+                        text: finalPrompt
+                    }
+                ]
+            }
+        ]
+    };
+    try {
+        const response = await fetch(geminiApiUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(requestBody)
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(()=>({
+                    message: response.statusText
+                }));
+            return {
+                error: `Gemini API\u{30A8}\u{30E9}\u{30FC}: ${errorData.error ? errorData.error.message : response.status}`
+            };
+        }
+        const data = await response.json();
+        if (data.candidates && data.candidates.length > 0 && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts.length > 0) return {
+            summaryMarkdown: data.candidates[0].content.parts[0].text,
+            actualPromptSentToLLM: finalPrompt
+        };
+        return {
+            error: "Gemini API\u304C\u671F\u5F85\u3055\u308C\u308B\u8981\u7D04\u69CB\u9020\u3092\u8FD4\u3057\u307E\u305B\u3093\u3067\u3057\u305F\u3002"
+        };
+    } catch (e) {
+        console.error("generateSummaryWithGeminiInternal error:", e);
+        return {
+            error: "\u8981\u7D04\u751F\u6210\u4E2D\u306B\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002"
+        };
+    }
+}
+async function getDocumentSummary(url, userSettings) {
+    const jinaApiKey = (0, _settingsJs.getApiKey)("jina"); // main.jsがgetSettings()で取得したものを渡す
+    const geminiApiKey = (0, _settingsJs.getApiKey)("gemini");
+    // 1. 本文取得
+    const articleResult = await fetchArticleContentInternal(url, jinaApiKey);
+    if (articleResult.error) return {
+        error: articleResult.error
+    };
+    if (!articleResult.content) return {
+        error: "\u8A18\u4E8B\u306E\u672C\u6587\u30B3\u30F3\u30C6\u30F3\u30C4\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002"
+    };
+    // 2. 要約生成
+    const summaryResult = await generateSummaryWithGeminiInternal(articleResult.content, userSettings, geminiApiKey);
+    if (summaryResult.error) return {
+        error: summaryResult.error,
+        title: articleResult.title
+    }; // エラーでもタイトルは返す
+    return {
+        title: articleResult.title,
+        summaryMarkdown: summaryResult.summaryMarkdown,
+        actualPromptSentToLLM: summaryResult.actualPromptSentToLLM
+    };
+}
+async function getFollowUpResponse(conversationHistory, newQuestionText) {
+    const geminiApiKey = (0, _settingsJs.getApiKey)("gemini"); // settings.jsから
+    if (!geminiApiKey) return {
+        error: "Gemini API\u30AD\u30FC\u304C\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002"
+    };
+    // 既存の会話履歴からtimestampを除外し、新しい質問を追加
+    // conversationHistory は [{role, parts:[{text}]}, ...] の形式を期待
+    const contentsForApi = conversationHistory.map((turn)=>({
+            role: turn.role,
+            parts: turn.parts.map((part)=>({
+                    text: part.text
+                }))
+        }));
+    contentsForApi.push({
+        role: "user",
+        parts: [
+            {
+                text: newQuestionText
+            }
+        ]
+    });
+    // --- (任意) トークン数管理: ここで contentsForApi が長すぎる場合の処理 ---
+    // 例: const limitedContents = limitConversationTurns(contentsForApi, 10); // 最新10ターン
+    // finalContents = limitedContents;
+    // --- プロンプトエンジニアリング (追加質問用) ---
+    // 初回要約時とは異なり、システム指示は conversationHistory の先頭に既にある想定か、
+    // あるいは毎回付与するか。Gemini APIは会話履歴をそのまま渡せば文脈を理解するはず。
+    // 必要なら、userSettingsから得られる指示をここでも考慮して
+    // contentsForApi の末尾 (ユーザーの質問の前) に model ロールでシステムメッセージを挟むこともできる。
+    // 今回はシンプルに会話履歴 + 新しい質問とする。
+    const requestBody = {
+        contents: contentsForApi,
+        // generationConfig や safetySettings も userSettings から取得して設定可能
+        generationConfig: {
+        },
+        safetySettings: []
+    };
+    // ログで確認
+    console.log("Sending to Gemini (follow-up):", JSON.stringify(requestBody, null, 2));
+    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+    try {
+        const response = await fetch(geminiApiUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(requestBody)
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(()=>({
+                    message: response.statusText
+                }));
+            return {
+                error: `Gemini API\u{30A8}\u{30E9}\u{30FC} (\u{8FFD}\u{52A0}\u{8CEA}\u{554F}): ${errorData.error ? errorData.error.message : response.status}`
+            };
+        }
+        const data = await response.json();
+        if (data.candidates && data.candidates.length > 0 && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts.length > 0) // 実際には、新しいユーザーの質問と、モデルの応答の両方を返す必要がある
+        return {
+            userQuestion: newQuestionText,
+            modelResponseMarkdown: data.candidates[0].content.parts[0].text
+        };
+        return {
+            error: "Gemini API\u304C\u671F\u5F85\u3055\u308C\u308B\u5FDC\u7B54\u69CB\u9020\u3092\u8FD4\u3057\u307E\u305B\u3093\u3067\u3057\u305F (\u8FFD\u52A0\u8CEA\u554F)\u3002"
+        };
+    } catch (e) {
+        console.error("getFollowUpResponse error:", e);
+        return {
+            error: "\u8FFD\u52A0\u8CEA\u554F\u306E\u5FDC\u7B54\u751F\u6210\u4E2D\u306B\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002"
+        };
+    }
+}
+
+},{"./settings.js":"1miDW","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"1miDW":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+/**
+ * アプリケーション起動時にローカルストレージから設定を読み込む。
+ * 保存された設定がなければデフォルト値（または空）で初期化。
+ */ parcelHelpers.export(exports, "initializeSettings", ()=>initializeSettings);
+/**
+ * 現在の全ての設定オブジェクトのコピーを返す。
+ * @returns {object} 設定オブジェクト
+ */ parcelHelpers.export(exports, "getSettings", ()=>getSettings);
+/**
+ * 特定のAPIキーを取得する。
+ * @param {'jina' | 'gemini'} type - 取得したいAPIキーのタイプ
+ * @returns {string} APIキー
+ */ parcelHelpers.export(exports, "getApiKey", ()=>getApiKey);
+/**
+ * 新しい設定オブジェクトを受け取り、現在の設定を更新してローカルストレージに保存する。
+ * @param {object} newSettings - 保存する新しい設定オブジェクト
+ */ parcelHelpers.export(exports, "saveSettings", ()=>saveSettings);
+/**
+ * 全ての設定をデフォルトに戻す（ローカルストレージからも削除）
+ */ parcelHelpers.export(exports, "resetSettings", ()=>resetSettings);
+const SETTINGS_STORAGE_KEY = "ExplAInfySettings";
+// モジュール内のプライベートな状態として設定を保持
+let currentSettings = {
+    jinaApiKey: "",
+    geminiApiKey: "",
+    userLevel: 1,
+    userLevelText: "",
+    additionalPrompt: ""
+};
+// デフォルト設定
+const defaultSettings = {
+    jinaApiKey: "",
+    geminiApiKey: "",
+    userLevel: 1,
+    userLevelText: "",
+    additionalPrompt: ""
+};
+function initializeSettings() {
+    const savedSettingsString = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (savedSettingsString) try {
+        const savedSettings = JSON.parse(savedSettingsString);
+        currentSettings = {
+            ...defaultSettings,
+            ...savedSettings
+        };
+    } catch (e) {
+        console.error("Failed to parse settings from localStorage", e);
+        currentSettings = {
+            ...defaultSettings
+        };
+    }
+    else currentSettings = {
+        ...defaultSettings
+    };
+    console.log("Settings initialized:", currentSettings);
+}
+function getSettings() {
+    return {
+        ...currentSettings
+    }; // 外部で直接変更できないようにコピーを返す
+}
+function getApiKey(type) {
+    if (type === "jina") return currentSettings.jinaApiKey;
+    if (type === "gemini") return currentSettings.geminiApiKey;
+    return "";
+}
+function saveSettings(newSettings) {
+    // newSettings の中身を検証・サニタイズしてもいい
+    currentSettings = {
+        ...currentSettings,
+        ...newSettings
+    }; // 部分的な更新も許容
+    try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(currentSettings));
+        console.log("Settings saved:", currentSettings);
+    } catch (e) {
+        console.error("Failed to save settings to localStorage", e);
+        // ストレージがいっぱいの場合などのエラーハンドリング
+        alert("\u8A2D\u5B9A\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u30B9\u30C8\u30EC\u30FC\u30B8\u306E\u7A7A\u304D\u5BB9\u91CF\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+    }
+}
+function resetSettings() {
+    currentSettings = {
+        ...defaultSettings
+    };
+    localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    console.log("Settings reset to default.");
+}
+// 初期化をこのモジュールが読み込まれた時に行う
+initializeSettings();
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"jnFvT":[function(require,module,exports,__globalThis) {
+exports.interopDefault = function(a) {
+    return a && a.__esModule ? a : {
+        default: a
+    };
+};
+exports.defineInteropFlag = function(a) {
+    Object.defineProperty(a, '__esModule', {
+        value: true
+    });
+};
+exports.exportAll = function(source, dest) {
+    Object.keys(source).forEach(function(key) {
+        if (key === 'default' || key === '__esModule' || Object.prototype.hasOwnProperty.call(dest, key)) return;
+        Object.defineProperty(dest, key, {
+            enumerable: true,
+            get: function() {
+                return source[key];
+            }
+        });
+    });
+    return dest;
+};
+exports.export = function(dest, destName, get) {
+    Object.defineProperty(dest, destName, {
+        enumerable: true,
+        get: get
+    });
+};
+
+},{}],"4OwKy":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+// --- UI制御関数 ---
+parcelHelpers.export(exports, "showPage", ()=>showPage);
+parcelHelpers.export(exports, "initializeModal", ()=>initializeModal);
+parcelHelpers.export(exports, "openSettingsModal", ()=>openSettingsModal);
+parcelHelpers.export(exports, "closeSettingsModal", ()=>closeSettingsModal);
+parcelHelpers.export(exports, "getSettingsFromModalForm", ()=>getSettingsFromModalForm);
+parcelHelpers.export(exports, "populateModalFormWithSettings", ()=>populateModalFormWithSettings);
+parcelHelpers.export(exports, "highlightEmptyApiKeysInModal", ()=>highlightEmptyApiKeysInModal);
+parcelHelpers.export(exports, "clearApiKeyErrorStylesInModal", ()=>clearApiKeyErrorStylesInModal);
+parcelHelpers.export(exports, "initializeTextareaAutoHeight", ()=>initializeTextareaAutoHeight);
+parcelHelpers.export(exports, "updateResponseTitle", ()=>updateResponseTitle);
+parcelHelpers.export(exports, "displayLoadingMessage", ()=>displayLoadingMessage);
+parcelHelpers.export(exports, "displayErrorMessage", ()=>displayErrorMessage);
+// アプリケーション起動時に行うUI関連の初期化 (main.js から呼び出す)
+parcelHelpers.export(exports, "initializeUI", ()=>initializeUI);
+parcelHelpers.export(exports, "renderHistoryList", ()=>renderHistoryList);
+parcelHelpers.export(exports, "renderConversationTurns", ()=>renderConversationTurns);
+var _dompurify = require("dompurify");
+var _dompurifyDefault = parcelHelpers.interopDefault(_dompurify);
+var _marked = require("marked");
+var _micromodal = require("micromodal");
+var _micromodalDefault = parcelHelpers.interopDefault(_micromodal);
+// --- DOM要素のキャッシュ ---
+const urlInputSection = document.getElementById("url-input-section");
+const historyListElement = document.getElementById("history-list");
+const responseSection = document.getElementById("response-section");
+const responseOutput = document.getElementById("response-output");
+const responseTitle = document.getElementById("response-title");
+const logoLink = document.getElementById("logo-link");
+// モーダル関連の要素 (モーダル制御とフォーム値設定に使う)
+const modalGeminiApiKeyInput = document.getElementById("modal-gemini-api-key-input");
+const modalJinaApiKeyInput = document.getElementById("modal-jina-api-key-input");
+const modalUserLevelRadios = document.querySelectorAll('input[name="user-level-radio"]');
+const modalUserLevelText = document.getElementById("user-level-text");
+const modalAdditionalPromptInput = document.getElementById("modal-additional-prompt-input");
+const modalTabs = document.querySelectorAll(".modal-tabs .tab-item");
+const tabContents = document.querySelectorAll(".modal__content .tab-content");
+function showPage(pageElementToShow) {
+    urlInputSection.classList.remove("active");
+    responseSection.classList.remove("active");
+    if (pageElementToShow) pageElementToShow.classList.add("active");
+    // ロゴ表示制御もここで行う
+    if (logoLink) {
+        if (pageElementToShow && pageElementToShow.id === "url-input-section") logoLink.classList.add("hidden-on-main");
+        else logoLink.classList.remove("hidden-on-main");
+    }
+}
 function initializeModal() {
     (0, _micromodalDefault.default).init({
-        onShow: (modal)=>console.info(`${modal.id} is shown`),
-        onClose: (modal)=>console.info(`${modal.id} is hidden`),
-        disableScroll: true,
-        disableFocus: false,
-        awaitCloseAnimation: true
     });
+    // モーダル内のタブ切り替えイベントリスナーもここで設定
+    setupModalTabsInternal(); // 内部関数として
+}
+function setupModalTabsInternal() {
+    modalTabs.forEach((tab)=>{
+        tab.addEventListener("click", ()=>{
+            modalTabs.forEach((t)=>t.classList.remove("active-tab"));
+            tabContents.forEach((c)=>c.classList.remove("active-tab-content"));
+            tab.classList.add("active-tab");
+            const targetContentId = tab.dataset.tabTarget;
+            document.querySelector(targetContentId).classList.add("active-tab-content");
+        });
+    });
+}
+function openSettingsModal() {
+    (0, _micromodalDefault.default).show("modal-settings");
+}
+function closeSettingsModal() {
+    (0, _micromodalDefault.default).close("modal-settings");
+}
+function getSettingsFromModalForm() {
+    let selectedUserLevel = "1";
+    modalUserLevelRadios.forEach((radio)=>{
+        if (radio.checked) selectedUserLevel = radio.value;
+    });
+    return {
+        geminiApiKey: modalGeminiApiKeyInput.value.trim(),
+        jinaApiKey: modalJinaApiKeyInput.value.trim(),
+        userLevel: parseInt(selectedUserLevel, 10),
+        userLevelText: modalUserLevelText.value.trim(),
+        additionalPrompt: modalAdditionalPromptInput.value.trim()
+    };
+}
+function populateModalFormWithSettings(settings) {
+    modalGeminiApiKeyInput.value = settings.geminiApiKey || "";
+    modalJinaApiKeyInput.value = settings.jinaApiKey || "";
+    modalUserLevelRadios.forEach((radio)=>{
+        radio.checked = radio.value === String(settings.userLevel);
+    });
+    modalUserLevelText.value = settings.userLevelText || ""; // settings.js のキー名と合わせる
+    if (modalAdditionalPromptInput) modalAdditionalPromptInput.value = settings.additionalPrompt || "";
+}
+function highlightEmptyApiKeysInModal() {
+    if (!modalGeminiApiKeyInput.value.trim()) modalGeminiApiKeyInput.style.borderColor = "red";
+    else modalGeminiApiKeyInput.style.borderColor = "";
+    if (!modalJinaApiKeyInput.value.trim()) modalJinaApiKeyInput.style.borderColor = "red";
+    else modalJinaApiKeyInput.style.borderColor = "";
+}
+function clearApiKeyErrorStylesInModal() {
+    modalGeminiApiKeyInput.style.borderColor = "";
+    modalJinaApiKeyInput.style.borderColor = "";
 }
 function initializeTextareaAutoHeight(textareaElement, initialRows) {
     if (!textareaElement) return;
@@ -740,218 +1427,78 @@ function initializeTextareaAutoHeight(textareaElement, initialRows) {
         textareaElement.style.height = `${newHeight}px`;
     });
 }
-function setupEventListeners() {
-    if (settingButton) settingButton.addEventListener("click", ()=>{
-        populateModalForm();
-        (0, _micromodalDefault.default).show("modal-settings");
-    });
-    if (saveModalSettingsButton) saveModalSettingsButton.addEventListener("click", handleSaveSettings);
-    if (logoLink) logoLink.addEventListener("click", (event)=>{
-        event.preventDefault();
-        showPage(urlInputSection);
-    });
-    if (submitButton && urlTextarea) {
-        submitButton.addEventListener("click", handleSubmit);
-        urlTextarea.addEventListener("keydown", (event)=>{
-            // Ctrl + Enter (または Meta + Enter for Mac) で送信
-            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault(); // デフォルトのEnterキーの動作（改行）をキャンセル
-                submitButton.click(); // 送信ボタンのクリックイベントを発火
-            }
-        // Enterキー単独の場合は、デフォルトの改行動作を許可するため、ここでは何もしない
-        });
-    }
-    if (submitAdditionalQuestionButton && additionalQuestionTextarea) additionalQuestionTextarea.addEventListener("keydown", (event)=>{
-        // Ctrl + Enter (または Meta + Enter for Mac) で送信
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-            event.preventDefault();
-            // submitAdditionalQuestionButton.click(); // 追加質問の送信処理 (後で実装)
-            console.log("\u8FFD\u52A0\u8CEA\u554F\u9001\u4FE1 (Ctrl+Enter):", additionalQuestionTextarea.value); // 仮の処理
-        // ここで handleAdditionalQuestion() のような関数を呼び出す
-        }
-    // Enterキー単独の場合は、デフォルトの改行動作を許可
-    });
-    modalTabs.forEach((tab)=>{
-        tab.addEventListener("click", ()=>{
-            modalTabs.forEach((t)=>t.classList.remove("active-tab"));
-            tabContents.forEach((c)=>c.classList.remove("active-tab-content"));
-            tab.classList.add("active-tab");
-            const targetContentId = tab.dataset.tabTarget;
-            document.querySelector(targetContentId).classList.add("active-tab-content");
-        });
-    });
+function updateResponseTitle(titleText) {
+    if (responseTitle) // responseTitle要素がHTMLに存在することを確認
+    responseTitle.textContent = titleText;
+    else console.warn("#response-title element not found.");
 }
-function showPage(pageToShow) {
-    // まず全てのメインページセクションを非表示にする
-    urlInputSection.classList.remove("active");
-    responseSection.classList.remove("active");
-    // 指定されたページセクションを表示
-    if (pageToShow) pageToShow.classList.add("active");
-    if (logoLink) {
-        if (pageToShow && pageToShow.id === "url-input-section") logoLink.classList.add("hidden-on-main");
-        else logoLink.classList.remove("hidden-on-main");
-    }
+function displayLoadingMessage(message = "<p>\u51E6\u7406\u4E2D...</p>") {
+    responseOutput.innerHTML = message;
 }
-async function handleSubmit() {
-    const JINA_API_KEY_FOR_REQUEST = (0, _settingsJs.getApiKey)("jina");
-    const GEMINI_API_KEY_FOR_REQUEST = (0, _settingsJs.getApiKey)("gemini");
-    if (!JINA_API_KEY_FOR_REQUEST || !GEMINI_API_KEY_FOR_REQUEST) {
-        alert("API\u30AD\u30FC\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
-        (0, _micromodalDefault.default).show("modal-settings");
+function displayErrorMessage(errorMessageText) {
+    responseOutput.innerHTML = `<p style="color: red;">\u{30A8}\u{30E9}\u{30FC}: ${errorMessageText}</p>`;
+}
+function initializeUI() {
+    initializeModal();
+// 他のUI初期化があればここに
+}
+function renderHistoryList(sessionSummaries) {
+    if (!historyListElement) return;
+    if (!sessionSummaries || sessionSummaries.length === 0) {
+        historyListElement.innerHTML = "<li>\u5C65\u6B74\u306F\u3042\u308A\u307E\u305B\u3093\u3002</li>";
         return;
     }
-    // submitButtonの処理を関数に分離
-    const urlToProcess = urlTextarea.value.trim();
-    if (!urlToProcess) {
-        alert("URL\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+    historyListElement.innerHTML = sessionSummaries.map((summary)=>`
+        <li>
+            <a href="#" data-session-id="${summary.id}">
+                <span class="history-title">${summary.title || "\u7121\u984C\u306E\u30BB\u30C3\u30B7\u30E7\u30F3"}</span>
+                <span class="history-timestamp">${new Date(summary.lastUpdatedAt).toLocaleString()}</span>
+            </a>
+        </li>
+    `).join("");
+}
+function renderConversationTurns(turnsArray) {
+    // originalUrlを引数で受け取る
+    if (!turnsArray || turnsArray.length === 0) {
+        responseOutput.innerHTML = "<p>\u307E\u3060\u4F1A\u8A71\u304C\u3042\u308A\u307E\u305B\u3093\u3002</p>";
         return;
     }
-    responseOutput.innerHTML = "<p>\u51E6\u7406\u4E2D...</p>";
-    showPage(responseSection);
-    try {
-        const articleData = await fetchArticleContent(urlToProcess, JINA_API_KEY_FOR_REQUEST);
-        if (!articleData || !articleData.content) {
-            responseOutput.innerHTML = "<p>\u8A18\u4E8B\u306E\u672C\u6587\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002</p>";
-            return;
-        }
-        const articleContent = articleData.content;
-        const articleTitle = articleData.title || "\u8AAC\u660E\u7D50\u679C"; // titleがなければデフォルト
-        document.querySelector("#response-section h2").textContent = articleTitle; // タイトルを設定
-        const markdownSummary = await summarizeTextWithGemini(articleContent, GEMINI_API_KEY_FOR_REQUEST);
-        if (markdownSummary) {
-            const dirtyHtml = (0, _marked.marked).parse(markdownSummary);
-            const cleanHtml = (0, _dompurifyDefault.default).sanitize(dirtyHtml);
-            responseOutput.innerHTML = cleanHtml;
-        } else responseOutput.innerHTML = "<p>\u8981\u7D04\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002</p>";
-    } catch (error) {
-        console.error("\u51E6\u7406\u4E2D\u306B\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F:", error);
-        responseOutput.innerHTML = `<p>\u{30A8}\u{30E9}\u{30FC}\u{304C}\u{767A}\u{751F}\u{3057}\u{307E}\u{3057}\u{305F}: ${error.message}</p>`;
-    }
-}
-async function fetchArticleContent(url, jinaApiKey) {
-    // Jina AI Reader API (jina.ai/reader) は GET リクエストで URL を `https://r.jina.ai/` の後に続ける
-    // ヘッダーに Authorization: Bearer YOUR_JINA_API_KEY が必要
-    const readerApiUrl = `https://r.jina.ai/${url}`;
-    console.log(`Fetching content from: ${readerApiUrl}`); // デバッグ用
-    const response = await fetch(readerApiUrl, {
-        method: "GET",
-        headers: {
-            Authorization: `Bearer ${jinaApiKey}`,
-            Accept: "application/json"
-        }
-    });
-    if (!response.ok) {
-        const errorData = await response.json().catch(()=>({
-                message: response.statusText
-            }));
-        console.error("Jina API Error:", errorData); // デバッグ用
-        throw new Error(`Jina API\u{304B}\u{3089}\u{306E}\u{30B3}\u{30F3}\u{30C6}\u{30F3}\u{30C4}\u{53D6}\u{5F97}\u{306B}\u{5931}\u{6557}\u{3057}\u{307E}\u{3057}\u{305F}: ${errorData.message || response.status}`);
-    }
-    const data = await response.json();
-    console.log("Jina API Response Data:", data); // デバッグ用
-    // Jina Reader APIのレスポンス構造に合わせて本文を取得する
-    // 通常、data.data.content や data.content などに本文が含まれるはず
-    // ここでは仮に data.data.content とする
-    if (data && data.data && data.data.content) return data.data;
-    else {
-        console.warn("Jina API did not return expected content structure.");
-        return null; // または適切なエラー処理
-    }
-}
-async function summarizeTextWithGemini(textToSummarize, geminiApiKey) {
-    const savedSettings = (0, _settingsJs.getSettings)();
-    let finalPrompt = DEFAULT_SUMMARY_PROMPT; // 基本プロンプト
-    // ユーザーレベルに応じたプロンプト調整
-    if (savedSettings.userLevel) {
-        let levelDescription = "";
-        switch(savedSettings.userLevel){
-            case 1:
-                levelDescription = "\u79C1\u306F\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u5B8C\u5168\u521D\u5B66\u8005\u3067\u3059\u3002";
-                break;
-            case 2:
-                levelDescription = "\u79C1\u306F\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u521D\u5B66\u8005\u3067\u3059\u3002";
-                break;
-            case 3:
-                levelDescription = "\u79C1\u306F\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u4E2D\u7D1A\u8005\u3067\u3059\u3002";
-                break;
-            case 4:
-                levelDescription = "\u79C1\u306F\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u4E0A\u7D1A\u8005\u3067\u3059\u3002";
-                break;
-            case 5:
-                levelDescription = "\u79C1\u306F\u975E\u5E38\u306B\u7D4C\u9A13\u8C4A\u5BCC\u306A\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u30A8\u30AD\u30B9\u30D1\u30FC\u30C8\u3067\u3059\u3002";
-                break;
-        }
-        if (levelDescription) finalPrompt += `\n${levelDescription}`;
-    }
-    if (savedSettings.userLevelText) finalPrompt += `
-\u{30E6}\u{30FC}\u{30B6}\u{30FC}\u{306E}\u{81EA}\u{5DF1}\u{7533}\u{544A}\u{30EC}\u{30D9}\u{30EB}: ${savedSettings.userLevelText}`;
-    // 追加プロンプト
-    if (savedSettings.additionalPrompt) finalPrompt += `
-\u{8FFD}\u{52A0}\u{306E}\u{6307}\u{793A}: ${savedSettings.additionalPrompt}`;
-    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
-    const requestBody = {
-        contents: [
-            {
-                parts: [
-                    {
-                        text: `${finalPrompt}\n\n${textToSummarize}`
-                    }
-                ]
+    let conversationHtml = "";
+    turnsArray.forEach((turn, index)=>{
+        // forEachの第2引数でインデックスを取得
+        if (turn.role && turn.parts && turn.parts.length > 0 && turn.parts[0].text) {
+            const textContent = turn.parts[0].text;
+            let turnHtml = "";
+            let displayContent = ""; // 表示用のコンテンツ
+            if (turn.role === "user") {
+                if (index === 0) {
+                    // finalPromptそのまま出すと長すぎる
+                    displayContent = "\u63D0\u793A\u3057\u305F\u30C9\u30AD\u30E5\u30E1\u30F3\u30C8\u306B\u3064\u3044\u3066\u8AAC\u660E\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+                    const sanitizedText = (0, _dompurifyDefault.default).sanitize(displayContent.replace(/\n/g, "<br>"));
+                    turnHtml = `<div class="chat-message user-message initial-request"><div class="message-bubble">${sanitizedText}</div></div>`;
+                } else {
+                    // 2ターン目以降のユーザーの質問はそのまま表示
+                    displayContent = textContent;
+                    const sanitizedText = (0, _dompurifyDefault.default).sanitize(displayContent.replace(/\n/g, "<br>"));
+                    turnHtml = `<div class="chat-message user-message"><div class="message-bubble">${sanitizedText}</div></div>`;
+                }
+            } else if (turn.role === "model") // モデルの応答はマークダウンとして処理
+            try {
+                const dirtyHtml = (0, _marked.marked).parse(textContent);
+                const cleanHtml = (0, _dompurifyDefault.default).sanitize(dirtyHtml);
+                turnHtml = `<div class="chat-message model-message"><div class="message-bubble">${cleanHtml}</div></div>`;
+            } catch (e) {
+                console.error("Markdown parsing/sanitizing error for model message:", e);
+                const sanitizedText = (0, _dompurifyDefault.default).sanitize(textContent.replace(/\n/g, "<br>"));
+                turnHtml = `<div class="chat-message model-message error-rendering"><div class="message-bubble">\u{8868}\u{793A}\u{30A8}\u{30E9}\u{30FC}: ${sanitizedText}</div></div>`;
             }
-        ]
-    };
-    const response = await fetch(geminiApiUrl, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(requestBody)
+            conversationHtml += turnHtml;
+        }
     });
-    if (!response.ok) {
-        const errorData = await response.json().catch(()=>({
-                message: response.statusText
-            }));
-        console.error("Gemini API Error:", errorData);
-        throw new Error(`Gemini API\u{304B}\u{3089}\u{306E}\u{8981}\u{7D04}\u{53D6}\u{5F97}\u{306B}\u{5931}\u{6557}\u{3057}\u{307E}\u{3057}\u{305F}: ${errorData.error ? errorData.error.message : response.status}`);
-    }
-    const data = await response.json();
-    console.log("Gemini API Response Data:", data); // デバッグ用
-    // Gemini APIのレスポンス構造に合わせて要約テキストを取得
-    // 通常、data.candidates[0].content.parts[0].text に含まれるっぽい。
-    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts.length > 0) return data.candidates[0].content.parts[0].text;
-    else {
-        console.warn("Gemini API did not return expected summary structure.");
-        return "\u8981\u7D04\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002";
-    }
-}
-// --- 設定関連の関数 ---
-function populateModalForm() {
-    const current = (0, _settingsJs.getSettings)();
-    modalFormElements.modalGeminiApiKeyInput.value = current.geminiApiKey;
-    modalFormElements.modalJinaApiKeyInput.value = current.jinaApiKey;
-    modalFormElements.modalUserLevelRadios.forEach((radio)=>{
-        radio.checked = radio.value === String(current.userLevel);
-    });
-    modalFormElements.modalUserLevelText.value = current.userLevelText;
-    modalFormElements.modalAdditionalPromptInput.value = current.additionalPrompt;
-}
-function handleSaveSettings() {
-    let selectedUserLevel = "1";
-    modalFormElements.modalUserLevelRadios.forEach((radio)=>{
-        if (radio.checked) selectedUserLevel = radio.value;
-    });
-    const newSettings = {
-        geminiApiKey: modalFormElements.modalGeminiApiKeyInput.value.trim(),
-        jinaApiKey: modalFormElements.modalJinaApiKeyInput.value.trim(),
-        userLevel: parseInt(selectedUserLevel, 10),
-        userLevelText: modalFormElements.modalUserLevelText.value.trim(),
-        additionalPrompt: modalFormElements.modalAdditionalPromptInput.value.trim()
-    };
-    (0, _settingsJs.saveSettings)(newSettings);
-    if (!(0, _settingsJs.getApiKey)("jina") || !(0, _settingsJs.getApiKey)("gemini")) alert("API\u30AD\u30FC\u304C\u307E\u3060\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002\u4E00\u90E8\u6A5F\u80FD\u304C\u5229\u7528\u3067\u304D\u307E\u305B\u3093\u3002");
+    responseOutput.innerHTML = conversationHtml;
 }
 
-},{"dompurify":"1IHUz","marked":"fSyEy","micromodal":"fpXyP","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","./settings.js":"1miDW"}],"1IHUz":[function(require,module,exports,__globalThis) {
+},{"dompurify":"1IHUz","marked":"fSyEy","micromodal":"fpXyP","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"1IHUz":[function(require,module,exports,__globalThis) {
 /*! @license DOMPurify 3.2.5 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.2.5/LICENSE */ (function(global, factory) {
     module.exports = factory();
 })(this, function() {
@@ -4990,130 +5537,370 @@ var n, i, a, r, s, l = (n = [
 "undefined" != typeof window && (window.MicroModal = l);
 exports.default = l;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"jnFvT":[function(require,module,exports,__globalThis) {
-exports.interopDefault = function(a) {
-    return a && a.__esModule ? a : {
-        default: a
-    };
-};
-exports.defineInteropFlag = function(a) {
-    Object.defineProperty(a, '__esModule', {
-        value: true
-    });
-};
-exports.exportAll = function(source, dest) {
-    Object.keys(source).forEach(function(key) {
-        if (key === 'default' || key === '__esModule' || Object.prototype.hasOwnProperty.call(dest, key)) return;
-        Object.defineProperty(dest, key, {
-            enumerable: true,
-            get: function() {
-                return source[key];
-            }
-        });
-    });
-    return dest;
-};
-exports.export = function(dest, destName, get) {
-    Object.defineProperty(dest, destName, {
-        enumerable: true,
-        get: get
-    });
-};
-
-},{}],"1miDW":[function(require,module,exports,__globalThis) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"jkmVr":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 /**
- * アプリケーション起動時にローカルストレージから設定を読み込む。
- * 保存された設定がなければデフォルト値（または空）で初期化。
- */ parcelHelpers.export(exports, "initializeSettings", ()=>initializeSettings);
+ * 新しい会話セッション、または更新されたセッションを保存する。
+ * idbのputは、キーが存在すれば更新、なければ追加を行う。
+ * @param {object} sessionData - 保存するセッションデータ
+ * @returns {Promise<IDBValidKey>} 保存されたアイテムのキー (sessionId)
+ */ parcelHelpers.export(exports, "saveOrUpdateSession", ()=>saveOrUpdateSession);
 /**
- * 現在の全ての設定オブジェクトのコピーを返す。
- * @returns {object} 設定オブジェクト
- */ parcelHelpers.export(exports, "getSettings", ()=>getSettings);
+ * 指定されたIDのセッションを取得する。
+ * @param {string} sessionId
+ * @returns {Promise<object|undefined>} セッションデータ、または見つからなければ undefined
+ */ parcelHelpers.export(exports, "getSession", ()=>getSession);
 /**
- * 特定のAPIキーを取得する。
- * @param {'jina' | 'gemini'} type - 取得したいAPIキーのタイプ
- * @returns {string} APIキー
- */ parcelHelpers.export(exports, "getApiKey", ()=>getApiKey);
+ * 全てのセッションの概要（ID、タイトル、最終更新日時など）を最終更新日時の降順で取得する。
+ * @returns {Promise<Array<object>>} セッション概要の配列
+ */ parcelHelpers.export(exports, "getAllSessionSummaries", ()=>getAllSessionSummaries);
 /**
- * 新しい設定オブジェクトを受け取り、現在の設定を更新してローカルストレージに保存する。
- * @param {object} newSettings - 保存する新しい設定オブジェクト
- */ parcelHelpers.export(exports, "saveSettings", ()=>saveSettings);
-/**
- * 全ての設定をデフォルトに戻す（ローカルストレージからも削除）
- */ parcelHelpers.export(exports, "resetSettings", ()=>resetSettings);
-const SETTINGS_STORAGE_KEY = "explainfySettings";
-// モジュール内のプライベートな状態として設定を保持
-let currentSettings = {
-    jinaApiKey: "",
-    geminiApiKey: "",
-    userLevel: 1,
-    userLevelText: "",
-    additionalPrompt: ""
-};
-// デフォルト設定
-const defaultSettings = {
-    jinaApiKey: "",
-    geminiApiKey: "",
-    userLevel: 1,
-    userLevelText: "",
-    additionalPrompt: ""
-};
-function initializeSettings() {
-    const savedSettingsString = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (savedSettingsString) try {
-        const savedSettings = JSON.parse(savedSettingsString);
-        // 保存された各キーが存在するか確認しながらマージする方が安全
-        currentSettings = {
-            ...defaultSettings,
-            ...savedSettings
+ * 指定されたIDのセッションを削除する。
+ * @param {string} sessionId
+ * @returns {Promise<void>}
+ */ parcelHelpers.export(exports, "deleteSession", ()=>deleteSession);
+var _idb = require("idb");
+const DB_NAME = "ExplAInfyDB";
+const DB_VERSION = 1;
+const SESSIONS_STORE_NAME = "sessions";
+let dbPromise = null;
+function getDB() {
+    if (!dbPromise) dbPromise = (0, _idb.openDB)(DB_NAME, DB_VERSION, {
+        upgrade (db, oldVersion, newVersion, _transaction) {
+            console.log(`Upgrading DB from version ${oldVersion} to ${newVersion}`);
+            if (!db.objectStoreNames.contains(SESSIONS_STORE_NAME)) {
+                const store = db.createObjectStore(SESSIONS_STORE_NAME, {
+                    keyPath: "id"
+                });
+                // 履歴一覧のソート用にインデックスを作成 (例: 最終更新日時)
+                store.createIndex("lastUpdatedAt", "lastUpdatedAt");
+                console.log(`Object store ${SESSIONS_STORE_NAME} created.`);
+            }
+        // ここらへんよくわからんけど、スキーマの変更する場合は頑張って
+        }
+    });
+    return dbPromise;
+}
+async function saveOrUpdateSession(sessionData) {
+    if (!sessionData || !sessionData.id) throw new Error("Session data must have an id.");
+    // 最終更新日時を自動で設定
+    sessionData.lastUpdatedAt = Date.now();
+    const db = await getDB();
+    const tx = db.transaction(SESSIONS_STORE_NAME, "readwrite");
+    const store = tx.objectStore(SESSIONS_STORE_NAME);
+    const result = await store.put(sessionData);
+    await tx.done;
+    console.log("Session saved/updated:", sessionData.id);
+    return result;
+}
+async function getSession(sessionId) {
+    const db = await getDB();
+    const tx = db.transaction(SESSIONS_STORE_NAME, "readonly");
+    const store = tx.objectStore(SESSIONS_STORE_NAME);
+    const session = await store.get(sessionId);
+    await tx.done;
+    return session;
+}
+async function getAllSessionSummaries() {
+    const db = await getDB();
+    const tx = db.transaction(SESSIONS_STORE_NAME, "readonly");
+    const store = tx.objectStore(SESSIONS_STORE_NAME);
+    const index = store.index("lastUpdatedAt"); // インデックスを使用
+    const allSessions = await index.getAll(); // lastUpdatedAt でソートされた状態で取得
+    allSessions.reverse(); // 降順にする (もしindexが昇順なら)
+    return allSessions.map((session)=>({
+            // 必要な情報だけを抽出
+            id: session.id,
+            title: session.originalTitle,
+            lastUpdatedAt: session.lastUpdatedAt
+        }));
+}
+async function deleteSession(sessionId) {
+    const db = await getDB();
+    const tx = db.transaction(SESSIONS_STORE_NAME, "readwrite");
+    const store = tx.objectStore(SESSIONS_STORE_NAME);
+    await store.delete(sessionId);
+    await tx.done;
+    console.log("Session deleted:", sessionId);
+}
+
+},{"idb":"258QC","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"258QC":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "deleteDB", ()=>deleteDB);
+parcelHelpers.export(exports, "openDB", ()=>openDB);
+parcelHelpers.export(exports, "unwrap", ()=>unwrap);
+parcelHelpers.export(exports, "wrap", ()=>wrap);
+const instanceOfAny = (object, constructors)=>constructors.some((c)=>object instanceof c);
+let idbProxyableTypes;
+let cursorAdvanceMethods;
+// This is a function to prevent it throwing up in node environments.
+function getIdbProxyableTypes() {
+    return idbProxyableTypes || (idbProxyableTypes = [
+        IDBDatabase,
+        IDBObjectStore,
+        IDBIndex,
+        IDBCursor,
+        IDBTransaction
+    ]);
+}
+// This is a function to prevent it throwing up in node environments.
+function getCursorAdvanceMethods() {
+    return cursorAdvanceMethods || (cursorAdvanceMethods = [
+        IDBCursor.prototype.advance,
+        IDBCursor.prototype.continue,
+        IDBCursor.prototype.continuePrimaryKey
+    ]);
+}
+const transactionDoneMap = new WeakMap();
+const transformCache = new WeakMap();
+const reverseTransformCache = new WeakMap();
+function promisifyRequest(request) {
+    const promise = new Promise((resolve, reject)=>{
+        const unlisten = ()=>{
+            request.removeEventListener('success', success);
+            request.removeEventListener('error', error);
         };
-    } catch (e) {
-        console.error("Failed to parse settings from localStorage", e);
-        currentSettings = {
-            ...defaultSettings
+        const success = ()=>{
+            resolve(wrap(request.result));
+            unlisten();
         };
+        const error = ()=>{
+            reject(request.error);
+            unlisten();
+        };
+        request.addEventListener('success', success);
+        request.addEventListener('error', error);
+    });
+    // This mapping exists in reverseTransformCache but doesn't exist in transformCache. This
+    // is because we create many promises from a single IDBRequest.
+    reverseTransformCache.set(promise, request);
+    return promise;
+}
+function cacheDonePromiseForTransaction(tx) {
+    // Early bail if we've already created a done promise for this transaction.
+    if (transactionDoneMap.has(tx)) return;
+    const done = new Promise((resolve, reject)=>{
+        const unlisten = ()=>{
+            tx.removeEventListener('complete', complete);
+            tx.removeEventListener('error', error);
+            tx.removeEventListener('abort', error);
+        };
+        const complete = ()=>{
+            resolve();
+            unlisten();
+        };
+        const error = ()=>{
+            reject(tx.error || new DOMException('AbortError', 'AbortError'));
+            unlisten();
+        };
+        tx.addEventListener('complete', complete);
+        tx.addEventListener('error', error);
+        tx.addEventListener('abort', error);
+    });
+    // Cache it for later retrieval.
+    transactionDoneMap.set(tx, done);
+}
+let idbProxyTraps = {
+    get (target, prop, receiver) {
+        if (target instanceof IDBTransaction) {
+            // Special handling for transaction.done.
+            if (prop === 'done') return transactionDoneMap.get(target);
+            // Make tx.store return the only store in the transaction, or undefined if there are many.
+            if (prop === 'store') return receiver.objectStoreNames[1] ? undefined : receiver.objectStore(receiver.objectStoreNames[0]);
+        }
+        // Else transform whatever we get back.
+        return wrap(target[prop]);
+    },
+    set (target, prop, value) {
+        target[prop] = value;
+        return true;
+    },
+    has (target, prop) {
+        if (target instanceof IDBTransaction && (prop === 'done' || prop === 'store')) return true;
+        return prop in target;
     }
-    else currentSettings = {
-        ...defaultSettings
+};
+function replaceTraps(callback) {
+    idbProxyTraps = callback(idbProxyTraps);
+}
+function wrapFunction(func) {
+    // Due to expected object equality (which is enforced by the caching in `wrap`), we
+    // only create one new func per func.
+    // Cursor methods are special, as the behaviour is a little more different to standard IDB. In
+    // IDB, you advance the cursor and wait for a new 'success' on the IDBRequest that gave you the
+    // cursor. It's kinda like a promise that can resolve with many values. That doesn't make sense
+    // with real promises, so each advance methods returns a new promise for the cursor object, or
+    // undefined if the end of the cursor has been reached.
+    if (getCursorAdvanceMethods().includes(func)) return function(...args) {
+        // Calling the original function with the proxy as 'this' causes ILLEGAL INVOCATION, so we use
+        // the original object.
+        func.apply(unwrap(this), args);
+        return wrap(this.request);
     };
-    console.log("Settings initialized:", currentSettings);
+    return function(...args) {
+        // Calling the original function with the proxy as 'this' causes ILLEGAL INVOCATION, so we use
+        // the original object.
+        return wrap(func.apply(unwrap(this), args));
+    };
 }
-function getSettings() {
-    return {
-        ...currentSettings
-    }; // 外部で直接変更できないようにコピーを返す
+function transformCachableValue(value) {
+    if (typeof value === 'function') return wrapFunction(value);
+    // This doesn't return, it just creates a 'done' promise for the transaction,
+    // which is later returned for transaction.done (see idbObjectHandler).
+    if (value instanceof IDBTransaction) cacheDonePromiseForTransaction(value);
+    if (instanceOfAny(value, getIdbProxyableTypes())) return new Proxy(value, idbProxyTraps);
+    // Return the same value back if we're not going to transform it.
+    return value;
 }
-function getApiKey(type) {
-    if (type === "jina") return currentSettings.jinaApiKey;
-    if (type === "gemini") return currentSettings.geminiApiKey;
-    return "";
+function wrap(value) {
+    // We sometimes generate multiple promises from a single IDBRequest (eg when cursoring), because
+    // IDB is weird and a single IDBRequest can yield many responses, so these can't be cached.
+    if (value instanceof IDBRequest) return promisifyRequest(value);
+    // If we've already transformed this value before, reuse the transformed value.
+    // This is faster, but it also provides object equality.
+    if (transformCache.has(value)) return transformCache.get(value);
+    const newValue = transformCachableValue(value);
+    // Not all types are transformed.
+    // These may be primitive types, so they can't be WeakMap keys.
+    if (newValue !== value) {
+        transformCache.set(value, newValue);
+        reverseTransformCache.set(newValue, value);
+    }
+    return newValue;
 }
-function saveSettings(newSettings) {
-    // newSettings の中身を検証・サニタイズしてもいい
-    currentSettings = {
-        ...currentSettings,
-        ...newSettings
-    }; // 部分的な更新も許容
-    try {
-        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(currentSettings));
-        console.log("Settings saved:", currentSettings);
-    } catch (e) {
-        console.error("Failed to save settings to localStorage", e);
-        // ストレージがいっぱいの場合などのエラーハンドリング
-        alert("\u8A2D\u5B9A\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u30B9\u30C8\u30EC\u30FC\u30B8\u306E\u7A7A\u304D\u5BB9\u91CF\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+const unwrap = (value)=>reverseTransformCache.get(value);
+/**
+ * Open a database.
+ *
+ * @param name Name of the database.
+ * @param version Schema version.
+ * @param callbacks Additional callbacks.
+ */ function openDB(name, version, { blocked, upgrade, blocking, terminated } = {}) {
+    const request = indexedDB.open(name, version);
+    const openPromise = wrap(request);
+    if (upgrade) request.addEventListener('upgradeneeded', (event)=>{
+        upgrade(wrap(request.result), event.oldVersion, event.newVersion, wrap(request.transaction), event);
+    });
+    if (blocked) request.addEventListener('blocked', (event)=>blocked(// Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
+        event.oldVersion, event.newVersion, event));
+    openPromise.then((db)=>{
+        if (terminated) db.addEventListener('close', ()=>terminated());
+        if (blocking) db.addEventListener('versionchange', (event)=>blocking(event.oldVersion, event.newVersion, event));
+    }).catch(()=>{});
+    return openPromise;
+}
+/**
+ * Delete a database.
+ *
+ * @param name Name of the database.
+ */ function deleteDB(name, { blocked } = {}) {
+    const request = indexedDB.deleteDatabase(name);
+    if (blocked) request.addEventListener('blocked', (event)=>blocked(// Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
+        event.oldVersion, event));
+    return wrap(request).then(()=>undefined);
+}
+const readMethods = [
+    'get',
+    'getKey',
+    'getAll',
+    'getAllKeys',
+    'count'
+];
+const writeMethods = [
+    'put',
+    'add',
+    'delete',
+    'clear'
+];
+const cachedMethods = new Map();
+function getMethod(target, prop) {
+    if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === 'string')) return;
+    if (cachedMethods.get(prop)) return cachedMethods.get(prop);
+    const targetFuncName = prop.replace(/FromIndex$/, '');
+    const useIndex = prop !== targetFuncName;
+    const isWrite = writeMethods.includes(targetFuncName);
+    if (// Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
+    !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))) return;
+    const method = async function(storeName, ...args) {
+        // isWrite ? 'readwrite' : undefined gzipps better, but fails in Edge :(
+        const tx = this.transaction(storeName, isWrite ? 'readwrite' : 'readonly');
+        let target = tx.store;
+        if (useIndex) target = target.index(args.shift());
+        // Must reject if op rejects.
+        // If it's a write operation, must reject if tx.done rejects.
+        // Must reject with op rejection first.
+        // Must resolve with op value.
+        // Must handle both promises (no unhandled rejections)
+        return (await Promise.all([
+            target[targetFuncName](...args),
+            isWrite && tx.done
+        ]))[0];
+    };
+    cachedMethods.set(prop, method);
+    return method;
+}
+replaceTraps((oldTraps)=>({
+        ...oldTraps,
+        get: (target, prop, receiver)=>getMethod(target, prop) || oldTraps.get(target, prop, receiver),
+        has: (target, prop)=>!!getMethod(target, prop) || oldTraps.has(target, prop)
+    }));
+const advanceMethodProps = [
+    'continue',
+    'continuePrimaryKey',
+    'advance'
+];
+const methodMap = {};
+const advanceResults = new WeakMap();
+const ittrProxiedCursorToOriginalProxy = new WeakMap();
+const cursorIteratorTraps = {
+    get (target, prop) {
+        if (!advanceMethodProps.includes(prop)) return target[prop];
+        let cachedFunc = methodMap[prop];
+        if (!cachedFunc) cachedFunc = methodMap[prop] = function(...args) {
+            advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
+        };
+        return cachedFunc;
+    }
+};
+async function* iterate(...args) {
+    // tslint:disable-next-line:no-this-assignment
+    let cursor = this;
+    if (!(cursor instanceof IDBCursor)) cursor = await cursor.openCursor(...args);
+    if (!cursor) return;
+    cursor;
+    const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
+    ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
+    // Map this double-proxy back to the original, so other cursor methods work.
+    reverseTransformCache.set(proxiedCursor, unwrap(cursor));
+    while(cursor){
+        yield proxiedCursor;
+        // If one of the advancing methods was not called, call continue().
+        cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
+        advanceResults.delete(proxiedCursor);
     }
 }
-function resetSettings() {
-    currentSettings = {
-        ...defaultSettings
-    };
-    localStorage.removeItem(SETTINGS_STORAGE_KEY);
-    console.log("Settings reset to default.");
+function isIteratorProp(target, prop) {
+    return prop === Symbol.asyncIterator && instanceOfAny(target, [
+        IDBIndex,
+        IDBObjectStore,
+        IDBCursor
+    ]) || prop === 'iterate' && instanceOfAny(target, [
+        IDBIndex,
+        IDBObjectStore
+    ]);
 }
-// 初期化をこのモジュールが読み込まれた時に行う
-initializeSettings();
+replaceTraps((oldTraps)=>({
+        ...oldTraps,
+        get (target, prop, receiver) {
+            if (isIteratorProp(target, prop)) return iterate;
+            return oldTraps.get(target, prop, receiver);
+        },
+        has (target, prop) {
+            return isIteratorProp(target, prop) || oldTraps.has(target, prop);
+        }
+    }));
 
 },{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["9sVWG","fILKw"], "fILKw", "parcelRequire9b58", {})
 

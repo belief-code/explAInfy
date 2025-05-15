@@ -1,6 +1,6 @@
 :root {
   --app-header-height: 60px;
-  --sidebar-width: 18%;
+  --sidebar-width: 16%;
   --response-title-height: auto;
   --chat-input-area-min-height: 40px;
 }
@@ -504,5 +504,83 @@ body {
   cursor: not-allowed;
   background-color: #e9ecef;
   border-color: #ced4da;
+}
+
+.required-asterisk {
+  color: red;
+  margin-left: 4px;
+}
+
+.chat-message {
+  max-width: 85%;
+  margin-bottom: 10px;
+  display: flex;
+}
+
+.user-message {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.model-message {
+  justify-content: flex-start;
+  margin-right: auto;
+}
+
+.message-bubble {
+  word-wrap: break-word;
+  border-radius: 18px;
+  padding: 10px 15px;
+  line-height: 1.5;
+}
+
+.user-message .message-bubble {
+  color: #333;
+  background-color: #dcf8c6;
+  border-top-right-radius: 5px;
+}
+
+.model-message .message-bubble {
+  color: #333;
+  background-color: #f0f0f0;
+  border-top-left-radius: 5px;
+}
+
+.model-message.error-rendering .message-bubble {
+  color: #c62828;
+  background-color: #ffebee;
+  border: 1px solid #ef9a9a;
+}
+
+.model-message .message-bubble h1, .model-message .message-bubble h2, .model-message .message-bubble p {
+  margin: .5em 0;
+}
+
+#history-list li a {
+  color: #0366d6;
+  border-bottom: 1px solid #eee;
+  padding: 8px 5px;
+  font-size: .9em;
+  text-decoration: none;
+  display: block;
+}
+
+#history-list li a:hover {
+  background-color: #f5f5f5;
+}
+
+.history-title {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+  font-weight: 500;
+  display: block;
+  overflow: hidden;
+}
+
+.history-timestamp {
+  color: #586069;
+  font-size: .8em;
+  display: block;
 }
 /*# sourceMappingURL=explainfy-project.2cdaf7bc.css.map */
