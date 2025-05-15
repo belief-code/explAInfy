@@ -185,6 +185,7 @@ async function handleSubmit() {
   if (!JINA_API_KEY_FOR_REQUEST || !GEMINI_API_KEY_FOR_REQUEST) {
     alert("APIキーを入力してください");
     MicroModal.show("modal-settings");
+    return;
   }
   // submitButtonの処理を関数に分離
   const urlToProcess = urlTextarea.value.trim();
