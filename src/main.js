@@ -1,12 +1,8 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import MicroModal from "micromodal";
+import { getDocumentSummary } from "./api.js";
 import { getApiKey, getSettings, saveSettings } from "./settings.js";
-
-// --- グローバル変数・定数 ---
-const DEFAULT_SUMMARY_PROMPT =
-  "以下のユーザーレベルと指示に従い、マークダウン形式で回答のみを生成してください。前置きや定型的な挨拶は不要です。";
-const GEMINI_MODEL = "gemini-2.5-flash-preview-04-17";
 
 // --- DOM要素のキャッシュ (ページロード時に一度だけ取得) ---
 // 主要なセクション
@@ -25,6 +21,7 @@ const additionalQuestionTextarea = document.getElementById(
 const submitAdditionalQuestionButton = document.getElementById(
   "submit-additional-question-button"
 );
+const responseTitle = document.getElementById("response-title");
 
 // ヘッダー関連
 const logoLink = document.getElementById("logo-link");
@@ -198,160 +195,34 @@ async function handleSubmit() {
   showPage(responseSection);
 
   try {
-    const articleData = await fetchArticleContent(
-      urlToProcess,
-      JINA_API_KEY_FOR_REQUEST
-    );
-    if (!articleData || !articleData.content) {
-      responseOutput.innerHTML = "<p>記事の本文を取得できませんでした。</p>";
-      return;
-    }
-    const articleContent = articleData.content;
-    const articleTitle = articleData.title || "説明結果"; // titleがなければデフォルト
+    const userSettings = getSettings(); // settings.js から現在の設定を取得
+    const summaryResult = await getDocumentSummary(urlToProcess, userSettings); // api.js の新しい高レベル関数
 
-    document.querySelector("#response-section h2").textContent = articleTitle; // タイトルを設定
-    const markdownSummary = await summarizeTextWithGemini(
-      articleContent,
-      GEMINI_API_KEY_FOR_REQUEST
-    );
-    if (markdownSummary) {
-      const dirtyHtml = marked.parse(markdownSummary);
-      const cleanHtml = DOMPurify.sanitize(dirtyHtml);
-      responseOutput.innerHTML = cleanHtml;
+    if (summaryResult.error) {
+      displayErrorMessage(summaryResult.error);
     } else {
-      responseOutput.innerHTML = "<p>要約を取得できませんでした。</p>";
+      updateResponseTitle(summaryResult.title || "説明結果");
+      renderResponse(summaryResult.summaryMarkdown);
     }
   } catch (error) {
-    console.error("処理中にエラーが発生しました:", error);
-    responseOutput.innerHTML = `<p>エラーが発生しました: ${error.message}</p>`;
+    // getDocumentSummary内で予期せぬエラーが起きた場合
+    console.error("getDocumentSummary 呼び出し中にエラー:", error);
+    displayErrorMessage("予期せぬエラーが発生しました。");
   }
 }
 
-async function fetchArticleContent(url, jinaApiKey) {
-  // Jina AI Reader API (jina.ai/reader) は GET リクエストで URL を `https://r.jina.ai/` の後に続ける
-  // ヘッダーに Authorization: Bearer YOUR_JINA_API_KEY が必要
-  const readerApiUrl = `https://r.jina.ai/${url}`;
-  console.log(`Fetching content from: ${readerApiUrl}`); // デバッグ用
-
-  const response = await fetch(readerApiUrl, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${jinaApiKey}`,
-      Accept: "application/json", // JSON形式で結果を受け取ることを期待 (API仕様的に多分行ける)
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response
-      .json()
-      .catch(() => ({ message: response.statusText }));
-    console.error("Jina API Error:", errorData); // デバッグ用
-    throw new Error(
-      `Jina APIからのコンテンツ取得に失敗しました: ${errorData.message || response.status}`
-    );
-  }
-
-  const data = await response.json();
-  console.log("Jina API Response Data:", data); // デバッグ用
-  // Jina Reader APIのレスポンス構造に合わせて本文を取得する
-  // 通常、data.data.content や data.content などに本文が含まれるはず
-  // ここでは仮に data.data.content とする
-  if (data && data.data && data.data.content) {
-    return data.data;
-  } else {
-    console.warn("Jina API did not return expected content structure.");
-    return null; // または適切なエラー処理
-  }
+function displayErrorMessage(responseError) {
+  responseOutput.innerHTML = `<p>${responseError}</p>`;
+}
+function updateResponseTitle(articleTitle) {
+  responseTitle.textContent = articleTitle;
+}
+function renderResponse(responseMarkdown) {
+  const dirtyHtml = marked.parse(responseMarkdown);
+  const cleanHtml = DOMPurify.sanitize(dirtyHtml);
+  responseOutput.innerHTML = cleanHtml;
 }
 
-async function summarizeTextWithGemini(textToSummarize, geminiApiKey) {
-  const savedSettings = getSettings();
-  let finalPrompt = DEFAULT_SUMMARY_PROMPT; // 基本プロンプト
-
-  // ユーザーレベルに応じたプロンプト調整
-  if (savedSettings.userLevel) {
-    let levelDescription = "";
-    switch (savedSettings.userLevel) {
-      case 1:
-        levelDescription = "私はプログラミング完全初学者です。";
-        break;
-      case 2:
-        levelDescription = "私はプログラミング初学者です。";
-        break;
-      case 3:
-        levelDescription = "私はプログラミング中級者です。";
-        break;
-      case 4:
-        levelDescription = "私はプログラミング上級者です。";
-        break;
-      case 5:
-        levelDescription =
-          "私は非常に経験豊富なプログラミングエキスパートです。";
-        break;
-    }
-    if (levelDescription) {
-      finalPrompt += `\n${levelDescription}`;
-    }
-  }
-  if (savedSettings.userLevelText) {
-    finalPrompt += `\nユーザーの自己申告レベル: ${savedSettings.userLevelText}`;
-  }
-  // 追加プロンプト
-  if (savedSettings.additionalPrompt) {
-    finalPrompt += `\n追加の指示: ${savedSettings.additionalPrompt}`;
-  }
-
-  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
-
-  const requestBody = {
-    contents: [
-      {
-        parts: [
-          {
-            text: `${finalPrompt}\n\n${textToSummarize}`, // プロンプトと本文を結合
-          },
-        ],
-      },
-    ],
-    // generationConfig や safetySettings も必要に応じて追加➝多分期間内には無理
-  };
-
-  const response = await fetch(geminiApiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorData = await response
-      .json()
-      .catch(() => ({ message: response.statusText }));
-    console.error("Gemini API Error:", errorData);
-    throw new Error(
-      `Gemini APIからの要約取得に失敗しました: ${errorData.error ? errorData.error.message : response.status}`
-    );
-  }
-
-  const data = await response.json();
-  console.log("Gemini API Response Data:", data); // デバッグ用
-
-  // Gemini APIのレスポンス構造に合わせて要約テキストを取得
-  // 通常、data.candidates[0].content.parts[0].text に含まれるっぽい。
-  if (
-    data.candidates &&
-    data.candidates.length > 0 &&
-    data.candidates[0].content &&
-    data.candidates[0].content.parts &&
-    data.candidates[0].content.parts.length > 0
-  ) {
-    return data.candidates[0].content.parts[0].text;
-  } else {
-    console.warn("Gemini API did not return expected summary structure.");
-    return "要約を取得できませんでした。";
-  }
-}
 // --- 設定関連の関数 ---
 
 function populateModalForm() {
@@ -377,6 +248,17 @@ function handleSaveSettings() {
     additionalPrompt: modalFormElements.modalAdditionalPromptInput.value.trim(),
   };
   saveSettings(newSettings);
+  alert("設定を保存しました。");
+  if (!getApiKey("gemini")) {
+    modalFormElements.modalGeminiApiKeyInput.style.borderColor = "red";
+  } else {
+    modalFormElements.modalGeminiApiKeyInput.style.borderColor = ""; // エラー解除
+  }
+  if (!getApiKey("jina")) {
+    modalFormElements.modalJinaApiKeyInput.style.borderColor = "red";
+  } else {
+    modalFormElements.modalJinaApiKeyInput.style.borderColor = ""; // エラー解除
+  }
   if (!getApiKey("jina") || !getApiKey("gemini")) {
     alert("APIキーがまだ設定されていません。一部機能が利用できません。");
   }
