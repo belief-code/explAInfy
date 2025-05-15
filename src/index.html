@@ -20,8 +20,8 @@
       <div class="app-body-container">
         <!-- 左サイドバー -->
         <aside class="sidebar left-sidebar" id="history-sidebar">
-          <h2>履歴</h2>
-          <ul id="history-list">
+          <!--<h2>履歴</h2>
+          <ul id="history-list"> -->
             <!-- <li><a href="#">サンプル履歴1</a></li> -->
             <!-- <li><a href="#">サンプル履歴2</a></li> -->
           </ul>
@@ -49,7 +49,7 @@
           </section>
           <!-- 応答画面 -->
           <section id="response-section" class="page-section">
-            <h2>説明結果</h2>
+            <h2 id="response-title">説明結果</h2>
             <div class="response-content-wrapper">
               <div id="response-output">
                 <!-- ここに説明結果が表示される -->
@@ -155,7 +155,11 @@
 
             <div id="advanced-settings-content" class="tab-content">
               <div>
-                <label for="modal-gemini-api-key-input">Gemini API Key:</label>
+                <label for="modal-gemini-api-key-input"
+                  >Gemini API Key:<span class="required-asterisk"
+                    >*必須*</span
+                  ></label
+                >
                 <input
                   type="password"
                   id="modal-gemini-api-key-input"
@@ -167,7 +171,9 @@
               </div>
               <div style="margin-top: 15px">
                 <label for="modal-jina-api-key-input"
-                  >Jina AI Reader API Key:</label
+                  >Jina AI Reader API Key:<span class="required-asterisk"
+                    >*必須*</span
+                  ></label
                 >
                 <input
                   type="password"
@@ -210,6 +216,6 @@
         </div>
       </div>
     </div>
-    <script type="module" src="./script.js"></script>
+    <script type="module" src="./main.js"></script>
   </body>
 </html>
