@@ -26,9 +26,5 @@ Thumbs.db
 # Cache files
 .parcel-cache/
 
-<<<<<<< HEAD
-#memo
-=======
 # memo
->>>>>>> refactor/module-separation
 memo.md
