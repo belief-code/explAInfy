@@ -23,7 +23,8 @@
     "globals": "^16.1.0",
     "parcel": "^2.15.0",
     "prettier": "^3.5.3",
-    "rimraf": "^6.0.1"
+    "rimraf": "^6.0.1",
+    "sass": "^1.89.0"
   },
   "dependencies": {
     "dompurify": "^3.2.5",
