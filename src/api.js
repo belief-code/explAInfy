@@ -132,7 +132,10 @@ async function generateSummaryWithGeminiInternal(
       data.candidates[0].content.parts &&
       data.candidates[0].content.parts.length > 0
     ) {
-      return { summaryMarkdown: data.candidates[0].content.parts[0].text };
+      return {
+        summaryMarkdown: data.candidates[0].content.parts[0].text,
+        actualPromptSentToLLM: finalPrompt,
+      };
     }
     return { error: "Gemini APIが期待される要約構造を返しませんでした。" };
   } catch (e) {
@@ -173,5 +176,90 @@ export async function getDocumentSummary(url, userSettings) {
   return {
     title: articleResult.title,
     summaryMarkdown: summaryResult.summaryMarkdown,
+    actualPromptSentToLLM: summaryResult.actualPromptSentToLLM,
   };
+}
+
+export async function getFollowUpResponse(
+  conversationHistory,
+  newQuestionText
+) {
+  const geminiApiKey = getApiKey("gemini"); // settings.jsから
+  if (!geminiApiKey) {
+    return { error: "Gemini APIキーが設定されていません。" };
+  }
+
+  // 既存の会話履歴からtimestampを除外し、新しい質問を追加
+  // conversationHistory は [{role, parts:[{text}]}, ...] の形式を期待
+  const contentsForApi = conversationHistory.map((turn) => ({
+    role: turn.role,
+    parts: turn.parts.map((part) => ({ text: part.text })), // text以外のpartもあれば考慮
+  }));
+  contentsForApi.push({ role: "user", parts: [{ text: newQuestionText }] });
+
+  // --- (任意) トークン数管理: ここで contentsForApi が長すぎる場合の処理 ---
+  // 例: const limitedContents = limitConversationTurns(contentsForApi, 10); // 最新10ターン
+  // finalContents = limitedContents;
+
+  // --- プロンプトエンジニアリング (追加質問用) ---
+  // 初回要約時とは異なり、システム指示は conversationHistory の先頭に既にある想定か、
+  // あるいは毎回付与するか。Gemini APIは会話履歴をそのまま渡せば文脈を理解するはず。
+  // 必要なら、userSettingsから得られる指示をここでも考慮して
+  // contentsForApi の末尾 (ユーザーの質問の前) に model ロールでシステムメッセージを挟むこともできる。
+  // 今回はシンプルに会話履歴 + 新しい質問とする。
+
+  const requestBody = {
+    contents: contentsForApi,
+    // generationConfig や safetySettings も userSettings から取得して設定可能
+    generationConfig: {
+      /* ... */
+    },
+    safetySettings: [
+      /* ... */
+    ],
+  };
+  // ログで確認
+  console.log(
+    "Sending to Gemini (follow-up):",
+    JSON.stringify(requestBody, null, 2)
+  );
+
+  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+  try {
+    const response = await fetch(geminiApiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+    if (!response.ok) {
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: response.statusText }));
+      return {
+        error: `Gemini APIエラー (追加質問): ${errorData.error ? errorData.error.message : response.status}`,
+      };
+    }
+    const data = await response.json();
+    if (
+      data.candidates &&
+      data.candidates.length > 0 &&
+      data.candidates[0].content &&
+      data.candidates[0].content.parts &&
+      data.candidates[0].content.parts.length > 0
+    ) {
+      // 実際には、新しいユーザーの質問と、モデルの応答の両方を返す必要がある
+      return {
+        userQuestion: newQuestionText, // 保存用
+        modelResponseMarkdown: data.candidates[0].content.parts[0].text,
+      };
+    }
+    return {
+      error: "Gemini APIが期待される応答構造を返しませんでした (追加質問)。",
+    };
+  } catch (e) {
+    console.error("getFollowUpResponse error:", e);
+    return {
+      error: "追加質問の応答生成中にネットワークエラーが発生しました。",
+    };
+  }
 }

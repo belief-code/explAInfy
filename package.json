@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "dompurify": "^3.2.5",
+    "idb": "^8.0.3",
     "marked": "^15.0.11",
     "micromodal": "^0.6.1"
   }

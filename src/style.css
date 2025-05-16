@@ -1,7 +1,7 @@
 /* 基本的なリセットとページ全体のスタイル */
 :root {
   --app-header-height: 60px;
-  --sidebar-width: 18%; /* サイドバーの幅 */
+  --sidebar-width: 16%; /* サイドバーの幅 */
   --response-title-height: auto; /* タイトルは内容に合わせる */
   --chat-input-area-min-height: 40px; /* 入力エリアの最小高さ */
 }
@@ -527,4 +527,71 @@ body {
 .required-asterisk {
   color: red;
   margin-left: 4px; /* ラベルテキストとの間に少しスペース */
+}
+
+.chat-message {
+  display: flex; /* 吹き出しを左右に寄せるため */
+  margin-bottom: 10px;
+  max-width: 85%; /* 吹き出しの最大幅 */
+}
+
+.user-message {
+  justify-content: flex-end; /* ユーザーメッセージを右寄せ */
+  margin-left: auto; /* 右寄せにするための保険 */
+}
+
+.model-message {
+  justify-content: flex-start; /* AIメッセージを左寄せ */
+  margin-right: auto; /* 左寄せにするための保険 */
+}
+
+.message-bubble {
+  padding: 10px 15px;
+  border-radius: 11px;
+  line-height: 1.5;
+  word-wrap: break-word; /* 長い単語も折り返す */
+}
+
+.user-message .message-bubble {
+  background-color: #dcf8c6; /* 例: LINE風の緑 */
+  color: #333;
+  border-top-right-radius: 5px; /* 吹き出しの角を少し変える */
+}
+
+.model-message .message-bubble {
+  background-color: #ffffff; /* AIのメッセージは白に近いグレー */
+  color: #333;
+  border-top-left-radius: 5px;
+  border: 1px solid #333;
+}
+
+.model-message.error-rendering .message-bubble {
+  background-color: #ffebee; /* エラー時の背景色 */
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+}
+
+#history-list li a {
+  display: block;
+  padding: 8px 5px;
+  text-decoration: none;
+  color: #0366d6;
+  font-size: 0.9em;
+  border-bottom: 1px solid #eee;
+}
+#history-list li a:hover {
+  background-color: #f5f5f5;
+}
+.history-title {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+.history-timestamp {
+  display: block;
+  font-size: 0.8em;
+  color: #586069;
 }

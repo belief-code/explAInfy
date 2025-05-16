@@ -1,4 +1,4 @@
-const SETTINGS_STORAGE_KEY = "explainfySettings";
+const SETTINGS_STORAGE_KEY = "ExplAInfySettings";
 
 // モジュール内のプライベートな状態として設定を保持
 let currentSettings = {
