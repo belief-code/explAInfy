@@ -706,6 +706,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
     }
 });
 // --- 関数定義 ---
+// イベントリスナー関係
 function setupEventListeners() {
     if (settingButton) settingButton.addEventListener("click", ()=>{
         _uiJs.populateModalFormWithSettings((0, _settingsJs.getSettings)());
@@ -1364,6 +1365,12 @@ function initializeModal() {
     });
     // モーダル内のタブ切り替えイベントリスナーもここで設定
     setupModalTabsInternal(); // 内部関数として
+    const modalOverlay = document.querySelector("#modal-settings .modal__overlay");
+    if (modalOverlay) modalOverlay.addEventListener("mousedown", (event)=>{
+        // クリックされた要素がオーバーレイ自身であるかを確認
+        // (targetがoverlayで、かつcontainer内をクリックした結果のバブリングではないことを確認)
+        if (event.target === modalOverlay) (0, _micromodalDefault.default).close("modal-settings");
+    });
 }
 function setupModalTabsInternal() {
     modalTabs.forEach((tab)=>{
