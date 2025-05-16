@@ -529,7 +529,7 @@ body {
 
 .message-bubble {
   word-wrap: break-word;
-  border-radius: 18px;
+  border-radius: 11px;
   padding: 10px 15px;
   line-height: 1.5;
 }
@@ -543,6 +543,7 @@ body {
 .model-message .message-bubble {
   color: #333;
   background-color: #fff;
+  border: 1px solid #333;
   border-top-left-radius: 5px;
 }
 
@@ -550,10 +551,6 @@ body {
   color: #c62828;
   background-color: #ffebee;
   border: 1px solid #ef9a9a;
-}
-
-.model-message .message-bubble h1, .model-message .message-bubble h2, .model-message .message-bubble p {
-  margin: .5em 0;
 }
 
 #history-list li a {
