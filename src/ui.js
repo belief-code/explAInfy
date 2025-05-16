@@ -52,6 +52,18 @@ export function initializeModal() {
   });
   // モーダル内のタブ切り替えイベントリスナーもここで設定
   setupModalTabsInternal(); // 内部関数として
+  const modalOverlay = document.querySelector(
+    "#modal-settings .modal__overlay"
+  );
+  if (modalOverlay) {
+    modalOverlay.addEventListener("mousedown", (event) => {
+      // クリックされた要素がオーバーレイ自身であるかを確認
+      // (targetがoverlayで、かつcontainer内をクリックした結果のバブリングではないことを確認)
+      if (event.target === modalOverlay) {
+        MicroModal.close("modal-settings");
+      }
+    });
+  }
 }
 
 function setupModalTabsInternal() {
