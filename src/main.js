@@ -57,6 +57,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 // --- 関数定義 ---
+
+// イベントリスナー関係
 function setupEventListeners() {
   if (settingButton) {
     settingButton.addEventListener("click", () => {

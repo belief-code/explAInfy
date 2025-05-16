@@ -547,7 +547,7 @@ body {
 
 .message-bubble {
   padding: 10px 15px;
-  border-radius: 18px;
+  border-radius: 11px;
   line-height: 1.5;
   word-wrap: break-word; /* 長い単語も折り返す */
 }
@@ -559,21 +559,16 @@ body {
 }
 
 .model-message .message-bubble {
-  background-color: #f0f0f0; /* AIのメッセージは白に近いグレー */
+  background-color: #ffffff; /* AIのメッセージは白に近いグレー */
   color: #333;
   border-top-left-radius: 5px;
+  border: 1px solid #333;
 }
 
 .model-message.error-rendering .message-bubble {
   background-color: #ffebee; /* エラー時の背景色 */
   color: #c62828;
   border: 1px solid #ef9a9a;
-}
-
-.model-message .message-bubble h1,
-.model-message .message-bubble h2,
-.model-message .message-bubble p /* など */ {
-  margin: 0.5em 0; /* 吹き出し内のマージン調整 */
 }
 
 #history-list li a {
