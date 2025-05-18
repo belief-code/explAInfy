@@ -671,6 +671,8 @@ var _apiJs = require("./api.js");
 var _dbJs = require("./db.js");
 var _settingsJs = require("./settings.js");
 var _uiJs = require("./ui.js");
+// 追加質問管理用GeminiAPI応答待ちフラグ
+let isWaitingForAIResponse = false;
 // --- DOM要素のキャッシュ (ページロード時に一度だけ取得) ---
 // 主要なセクション
 const urlInputSection = document.getElementById("url-input-section");
@@ -688,12 +690,12 @@ const settingButton = document.getElementById("setting-button");
 const saveModalSettingsButton = document.getElementById("save-modal-settings-button");
 const modalTabs = document.querySelectorAll(".modal-tabs .tab-item");
 const tabContents = document.querySelectorAll(".modal__content .tab-content");
-let currentActiveSessionId = null;
-let currentTurns = []; //現在の会話のターンを保持する配列
+let currentActiveSession = null;
 // --- 初期化処理 ---
 document.addEventListener("DOMContentLoaded", async ()=>{
     (0, _settingsJs.initializeSettings)(); // settings.js の初期化を呼ぶ
     _uiJs.initializeUI(); // ui.js のUI初期化を呼ぶ
+    _uiJs.setupDocumentClickListenerForPopups();
     _uiJs.initializeTextareaAutoHeight(document.getElementById("additional-question-input"), 1);
     await updateAndRenderHistory();
     setupEventListeners();
@@ -707,15 +709,48 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 // --- 関数定義 ---
 // イベントリスナー関係
 function setupEventListeners() {
+    // 設定ボタン押下時イベント
     if (settingButton) settingButton.addEventListener("click", ()=>{
         _uiJs.populateModalFormWithSettings((0, _settingsJs.getSettings)());
         _uiJs.openSettingsModal();
     });
+    // モーダルウィンドウ保存ボタン押下時イベント
     if (saveModalSettingsButton) saveModalSettingsButton.addEventListener("click", handleSaveSettings);
+    // ページ左上ExplAInfyロゴ押下時イベント
     if (logoLink) logoLink.addEventListener("click", (event)=>{
         event.preventDefault();
         _uiJs.showPage(urlInputSection);
     });
+    // 履歴ポップアップ設定イベント
+    if (historyListElement) // 履歴アイテム内のメニューボタンクリック
+    historyListElement.addEventListener("click", (event)=>{
+        const menuButton = event.target.closest(".history-item-menu-button");
+        if (menuButton) {
+            event.stopPropagation(); // 他のクリックリスナーへの伝播を防ぐ
+            const sessionId = menuButton.dataset.sessionId;
+            const popupElement = document.getElementById(`popup-${sessionId}`);
+            if (popupElement) {
+                if (popupElement.style.display === "block") _uiJs.hideActiveHistoryPopup();
+                else _uiJs.showHistoryItemPopup(menuButton, popupElement);
+            }
+            return; // メニューボタンクリック時は以降の処理をしない
+        }
+        // 削除ボタンクリック
+        const deleteButton = event.target.closest(".popup-delete-button");
+        if (deleteButton) {
+            event.stopPropagation();
+            const sessionIdToDelete = deleteButton.dataset.sessionId;
+            handleDeleteSession(sessionIdToDelete);
+            _uiJs.hideActiveHistoryPopup(); // 削除後はポップアップを隠す
+            return;
+        }
+        // 履歴アイテム本体のクリック (既存のロジック)
+        const link = event.target.closest("a.history-link[data-session-id]");
+        if (link && !menuButton && !deleteButton) // メニューや削除ボタン以外がクリックされた場合
+        // ... (既存の履歴読み込み処理) ...
+        _uiJs.hideActiveHistoryPopup(); // 他のポップアップが開いていれば隠す
+    });
+    // 履歴押下時イベント
     if (historyListElement) historyListElement.addEventListener("click", async (event)=>{
         const link = event.target.closest("a[data-session-id]");
         if (!link) return;
@@ -726,23 +761,21 @@ function setupEventListeners() {
         _uiJs.showPage(document.getElementById("response-section")); // 先に応答画面に切り替え
         try {
             const sessionData = await _dbJs.getSession(sessionId);
-            if (sessionData && sessionData.turns) {
-                currentActiveSessionId = sessionId;
-                currentTurns = sessionData.turns;
-                _uiJs.renderConversationTurns(currentTurns);
-                _uiJs.updateResponseTitle(sessionData.originalTitle || "\u8AAC\u660E\u7D50\u679C");
+            if (sessionData) {
+                currentActiveSession = sessionData;
+                _uiJs.renderConversationTurns(currentActiveSession.turns, currentActiveSession.originalUrl);
+                _uiJs.updateResponseTitle(currentActiveSession.originalTitle || "\u8AAC\u660E\u7D50\u679C", currentActiveSession.originalUrl);
             } else {
                 _uiJs.displayErrorMessage("\u9078\u629E\u3055\u308C\u305F\u5C65\u6B74\u306E\u8AAD\u307F\u8FBC\u307F\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
-                currentActiveSessionId = null;
-                currentTurns = [];
+                currentActiveSession = null;
             }
         } catch (error) {
             console.error("\u5C65\u6B74\u306E\u8AAD\u307F\u8FBC\u307F\u4E2D\u306B\u30A8\u30E9\u30FC:", error);
             _uiJs.displayErrorMessage("\u5C65\u6B74\u306E\u8AAD\u307F\u8FBC\u307F\u4E2D\u306B\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002");
-            currentActiveSessionId = null;
-            currentTurns = [];
+            currentActiveSession = null;
         }
     });
+    // URL入力画面送信ボタン押下時イベント
     if (submitButton && urlTextarea) {
         submitButton.addEventListener("click", handleSubmit);
         urlTextarea.addEventListener("keydown", (event)=>{
@@ -753,6 +786,7 @@ function setupEventListeners() {
             }
         });
     }
+    // 追加質問送信ボタン押下時イベント
     if (submitAdditionalQuestionButton && additionalQuestionTextarea) {
         submitAdditionalQuestionButton.addEventListener("click", handleAdditionalQuestion);
         additionalQuestionTextarea.addEventListener("keydown", (event)=>{
@@ -762,6 +796,7 @@ function setupEventListeners() {
             }
         });
     }
+    // モーダルウィンドウタブ押下時イベント
     modalTabs.forEach((tab)=>{
         tab.addEventListener("click", ()=>{
             modalTabs.forEach((t)=>t.classList.remove("active-tab"));
@@ -772,15 +807,18 @@ function setupEventListeners() {
         });
     });
 }
+// 履歴更新＆表示用関数
 async function updateAndRenderHistory() {
     try {
         const summaries = await _dbJs.getAllSessionSummaries();
+        console.log(summaries);
         _uiJs.renderHistoryList(summaries);
     } catch (error) {
         console.error("\u5C65\u6B74\u306E\u53D6\u5F97\u307E\u305F\u306F\u8868\u793A\u306B\u5931\u6557\u3057\u307E\u3057\u305F:", error);
     // ui.renderHistoryList([]); // 空のリストを表示するなどのフォールバック
     }
 }
+// URL送信時間数
 async function handleSubmit() {
     if (!(0, _settingsJs.getApiKey)("jina") || !(0, _settingsJs.getApiKey)("gemini")) {
         alert("API\u30AD\u30FC\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
@@ -796,16 +834,14 @@ async function handleSubmit() {
     _uiJs.displayLoadingMessage();
     _uiJs.showPage(document.getElementById("response-section"));
     const newSessionId = crypto.randomUUID(); // UUIDを生成
-    currentActiveSessionId = newSessionId; // 現在のセッションIDとして保持 (main.js内の変数)
     try {
         const userSettings = (0, _settingsJs.getSettings)();
         const summaryResult = await _apiJs.getDocumentSummary(urlToProcess, userSettings);
         if (summaryResult.error) _uiJs.displayErrorMessage(summaryResult.error);
         else {
-            _uiJs.updateResponseTitle(summaryResult.title || "\u8AAC\u660E\u7D50\u679C");
             const userTurnContent = summaryResult.actualPromptSentToLLM || `\u{30C9}\u{30AD}\u{30E5}\u{30E1}\u{30F3}\u{30C8}: ${urlToProcess} \u{306E}\u{8AAC}\u{660E}\u{3092}\u{4F9D}\u{983C}`;
             const modelTurnContent = summaryResult.summaryMarkdown;
-            currentTurns = [
+            const initialTurns = [
                 {
                     role: "user",
                     parts: [
@@ -823,15 +859,16 @@ async function handleSubmit() {
                     ]
                 }
             ];
-            const sessionData = {
-                id: currentActiveSessionId,
+            currentActiveSession = {
+                id: newSessionId,
                 originalUrl: urlToProcess,
-                originalTitle: summaryResult.title,
+                originalTitle: summaryResult.title || "\u8AAC\u660E\u7D50\u679C",
                 createdAt: Date.now(),
-                turns: currentTurns
+                turns: initialTurns
             };
-            await _dbJs.saveOrUpdateSession(sessionData);
-            _uiJs.renderConversationTurns(currentTurns); // UIにも反映
+            await _dbJs.saveOrUpdateSession(currentActiveSession); // lastUpdatedAtはここで付与される
+            _uiJs.updateResponseTitle(currentActiveSession.originalTitle, currentActiveSession.originalUrl);
+            _uiJs.renderConversationTurns(currentActiveSession.turns, currentActiveSession.originalUrl);
             await updateAndRenderHistory();
         }
     } catch (error) {
@@ -839,6 +876,7 @@ async function handleSubmit() {
         _uiJs.displayErrorMessage("\u4E88\u671F\u305B\u306C\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002");
     }
 }
+// 設定保存用関数
 function handleSaveSettings() {
     const newSettings = _uiJs.getSettingsFromModalForm();
     if (newSettings) {
@@ -854,8 +892,13 @@ function handleSaveSettings() {
     console.error("\u30E2\u30FC\u30C0\u30EB\u304B\u3089\u306E\u8A2D\u5B9A\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
     _uiJs.closeSettingsModal();
 }
+// 追加質問送信用関数
 async function handleAdditionalQuestion() {
-    if (!currentActiveSessionId) {
+    if (isWaitingForAIResponse) {
+        console.log("\u73FE\u5728AI\u306E\u5FDC\u7B54\u5F85\u3061\u3067\u3059\u3002\u9023\u7D9A\u9001\u4FE1\u306F\u3067\u304D\u307E\u305B\u3093\u3002");
+        return; // 処理中なら何もしない
+    }
+    if (!currentActiveSession) {
         alert("\u307E\u305A\u6700\u521D\u306E\u8CEA\u554F\u3092\u884C\u3046\u304B\u3001\u5C65\u6B74\u304B\u3089\u4F1A\u8A71\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
         return;
     }
@@ -871,80 +914,77 @@ async function handleAdditionalQuestion() {
         _uiJs.openSettingsModal();
         return;
     }
+    isWaitingForAIResponse = true;
+    submitAdditionalQuestionButton.disabled = true;
     // UIにユーザーの質問を即時反映 (送信中であることが分かるように)
-    const userTurnForUI = {
+    const userTurnForMemory = {
         role: "user",
         parts: [
             {
                 text: newQuestionText
             }
-        ],
-        timestamp: Date.now()
+        ]
     };
-    currentTurns.push(userTurnForUI);
-    _uiJs.renderConversationTurns(currentTurns); // 新しい質問をUIに追加
+    currentActiveSession.turns.push(userTurnForMemory);
+    _uiJs.renderConversationTurns(currentActiveSession.turns, currentActiveSession.originalUrl);
     additionalQuestionTextarea.value = ""; // 入力欄クリア
     _uiJs.displayLoadingMessage("<p>AI\u304C\u5FDC\u7B54\u3092\u8003\u3048\u3066\u3044\u307E\u3059...</p>"); // ローディング表示を応答エリアの末尾に
     try {
-        const userSettings = (0, _settingsJs.getSettings)();
-        // APIに渡す履歴からはtimestampを除く
-        const historyForApi = currentTurns.slice(0, -1).map((turn)=>({
-                // 最後に追加したUI用ユーザーターンを除く
+        const historyForApi = currentActiveSession.turns.slice(0, -1).map((turn)=>({
                 role: turn.role,
                 parts: turn.parts.map((p)=>({
                         text: p.text
                     }))
             }));
-        const result = await _apiJs.getFollowUpResponse(historyForApi, newQuestionText, userSettings);
+        const result = await _apiJs.getFollowUpResponse(historyForApi, newQuestionText, (0, _settingsJs.getSettings)());
         if (result.error) {
             _uiJs.displayErrorMessage(result.error);
-            currentTurns.pop(); // 送信失敗したのでUIからユーザーの質問を削除 (またはエラー表示に置き換える)
-            _uiJs.renderConversationTurns(currentTurns); // UI更新
+            currentActiveSession.turns.pop(); // 送信失敗したのでメモリから削除
+            _uiJs.renderConversationTurns(currentActiveSession.turns, currentActiveSession.originalUrl);
         } else {
-            const modelTurnForStorage = {
+            const modelTurnForMemory = {
                 role: "model",
                 parts: [
                     {
                         text: result.modelResponseMarkdown
                     }
-                ],
-                timestamp: Date.now()
+                ]
             };
-            // currentTurns の最後の要素 (UIに表示したユーザーの質問) の後にモデルの応答を追加
-            // currentTurns.pop(); // UI用に追加したユーザーの質問を一度削除し、API応答と一緒にDB保存用の形式で再追加する
-            // 上記だとtimestampがずれるので、メモリ上のcurrentTurnsはそのままにして、
-            // DB保存時はAPIに送ったnewQuestionTextとAPIからの応答をペアにする
-            currentTurns[currentTurns.length - 1] = {
-                // 最後にUIに追加したユーザーの質問を更新(timestampはそのまま)
-                role: "user",
-                parts: [
-                    {
-                        text: newQuestionText
-                    }
-                ],
-                timestamp: userTurnForUI.timestamp
-            };
-            currentTurns.push(modelTurnForStorage);
-            // DBに保存
-            const sessionToUpdate = await _dbJs.getSession(currentActiveSessionId);
-            if (sessionToUpdate) {
-                sessionToUpdate.turns = currentTurns.map((turn)=>({
-                        // DB保存用にはtimestampを含める
-                        role: turn.role,
-                        parts: turn.parts,
-                        timestamp: turn.timestamp || Date.now()
-                    }));
-                await _dbJs.saveOrUpdateSession(sessionToUpdate);
-            }
-            _uiJs.renderConversationTurns(currentTurns); // 全体を再描画
-            await updateAndRenderHistory(); // 履歴リストも更新
+            currentActiveSession.turns.push(modelTurnForMemory); // メモリ上のセッションを更新
+            await _dbJs.saveOrUpdateSession(currentActiveSession); // 更新されたセッション全体をDBに保存
+            _uiJs.renderConversationTurns(currentActiveSession.turns, currentActiveSession.originalUrl);
+            await updateAndRenderHistory();
         }
     } catch (error) {
         console.error("\u8FFD\u52A0\u8CEA\u554F\u51E6\u7406\u4E2D\u306B\u30A8\u30E9\u30FC:", error);
         _uiJs.displayErrorMessage("\u8FFD\u52A0\u8CEA\u554F\u306E\u51E6\u7406\u4E2D\u306B\u4E88\u671F\u305B\u306C\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002");
     // 必要なら currentTurns から最後のユーザー質問を削除
     } finally{
-    // ローディング解除 (エラーでも成功でも responseOutput は上書きされるので不要かも)
+        isWaitingForAIResponse = false;
+        submitAdditionalQuestionButton.disabled = false;
+    }
+}
+// 履歴消去用関数
+async function handleDeleteSession(sessionId) {
+    if (!sessionId) return;
+    const sessionToDelete = await _dbJs.getSession(sessionId); // 削除対象の情報を取得 (タイトル確認用)
+    const title = sessionToDelete ? sessionToDelete.originalTitle || "\u3053\u306E\u30BB\u30C3\u30B7\u30E7\u30F3" : "\u9078\u629E\u3055\u308C\u305F\u30BB\u30C3\u30B7\u30E7\u30F3";
+    if (confirm(`\u{300C}${title}\u{300D}\u{3092}\u{524A}\u{9664}\u{3057}\u{3066}\u{3082}\u{3088}\u{308D}\u{3057}\u{3044}\u{3067}\u{3059}\u{304B}\u{FF1F}`)) try {
+        await _dbJs.deleteSession(sessionId);
+        console.log(`Session ${sessionId} deleted.`);
+        await updateAndRenderHistory(); // 履歴リストを更新
+        // もし削除したセッションが現在表示中のものだったら、UIをクリアする
+        if (currentActiveSession && currentActiveSession.id === sessionId) {
+            currentActiveSession = null;
+            // currentTurns = []; // currentTurnsもリセットした方が安全
+            _uiJs.showPage(urlInputSection); // URL入力画面に戻すなど
+            _uiJs.updateResponseTitle("\u8AAC\u660E\u7D50\u679C"); // タイトルリセット
+            _uiJs.renderConversationTurns([]); // 応答エリアクリア
+        }
+        alert(`\u{300C}${title}\u{300D}\u{3092}\u{524A}\u{9664}\u{3057}\u{307E}\u{3057}\u{305F}\u{3002}`);
+    } catch (error) {
+        console.error("\u30BB\u30C3\u30B7\u30E7\u30F3\u306E\u524A\u9664\u4E2D\u306B\u30A8\u30E9\u30FC:", error);
+        alert("\u30BB\u30C3\u30B7\u30E7\u30F3\u306E\u524A\u9664\u4E2D\u306B\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002");
     }
 }
 
@@ -1693,18 +1733,26 @@ parcelHelpers.export(exports, "displayErrorMessage", ()=>displayErrorMessage);
 // アプリケーション起動時に行うUI関連の初期化 (main.js から呼び出す)
 parcelHelpers.export(exports, "initializeUI", ()=>initializeUI);
 parcelHelpers.export(exports, "renderHistoryList", ()=>renderHistoryList);
+// ポップアップを表示する関数 (位置調整もここで行う)
+parcelHelpers.export(exports, "showHistoryItemPopup", ()=>showHistoryItemPopup);
+// ポップアップを隠す関数
+parcelHelpers.export(exports, "hideActiveHistoryPopup", ()=>hideActiveHistoryPopup);
+// ドキュメント全体のクリックでポップアップを閉じるイベントリスナー (initializeUIなどで一度だけ設定)
+parcelHelpers.export(exports, "setupDocumentClickListenerForPopups", ()=>setupDocumentClickListenerForPopups);
 parcelHelpers.export(exports, "renderConversationTurns", ()=>renderConversationTurns);
 var _dompurify = require("dompurify");
 var _dompurifyDefault = parcelHelpers.interopDefault(_dompurify);
 var _marked = require("marked");
 var _micromodal = require("micromodal");
 var _micromodalDefault = parcelHelpers.interopDefault(_micromodal);
+let activeHistoryPopup = null; // 現在開いているポップアップを管理
 // --- DOM要素のキャッシュ ---
 const urlInputSection = document.getElementById("url-input-section");
 const historyListElement = document.getElementById("history-list");
 const responseSection = document.getElementById("response-section");
 const responseOutput = document.getElementById("response-output");
-const responseTitle = document.getElementById("response-title");
+const responseTitleLink = document.getElementById("response-title-link");
+const responseTitleHeading = document.getElementById("response-title");
 const logoLink = document.getElementById("logo-link");
 // モーダル関連の要素 (モーダル制御とフォーム値設定に使う)
 const modalGeminiApiKeyInput = document.getElementById("modal-gemini-api-key-input");
@@ -1798,20 +1846,28 @@ function initializeTextareaAutoHeight(textareaElement, initialRows) {
         textareaElement.style.height = `${newHeight}px`;
     });
 }
-function updateResponseTitle(titleText) {
-    if (responseTitle) // responseTitle要素がHTMLに存在することを確認
-    responseTitle.textContent = titleText;
-    else console.warn("#response-title element not found.");
+function updateResponseTitle(titleText, url = null) {
+    // urlも引数で受け取る
+    if (responseTitleHeading) responseTitleHeading.textContent = titleText || "\u8AAC\u660E\u7D50\u679C";
+    else console.warn("#response-title (h2) element not found.");
+    if (responseTitleLink) {
+        if (url) {
+            responseTitleLink.href = url;
+            responseTitleLink.style.display = "block"; // 表示する
+        } else {
+            responseTitleLink.href = "#"; // URLがない場合はリンクを無効化（または非表示）
+            responseTitleLink.style.display = "none"; // URLがないならリンクごと隠すのも手
+        }
+    } else console.warn("#response-title-link (a) element not found.");
 }
 function displayLoadingMessage(message = "<p>\u51E6\u7406\u4E2D...</p>") {
-    responseOutput.innerHTML = message;
+    responseOutput.innerHTML += message;
 }
 function displayErrorMessage(errorMessageText) {
     responseOutput.innerHTML = `<p style="color: red;">\u{30A8}\u{30E9}\u{30FC}: ${errorMessageText}</p>`;
 }
 function initializeUI() {
     initializeModal();
-// 他のUI初期化があればここに
 }
 function renderHistoryList(sessionSummaries) {
     if (!historyListElement) return;
@@ -1820,15 +1876,64 @@ function renderHistoryList(sessionSummaries) {
         return;
     }
     historyListElement.innerHTML = sessionSummaries.map((summary)=>`
-        <li>
-            <a href="#" data-session-id="${summary.id}">
+        <li class="history-item">
+            <a href="#" class="history-link" data-session-id="${summary.id}">
                 <span class="history-title">${summary.title || "\u7121\u984C\u306E\u30BB\u30C3\u30B7\u30E7\u30F3"}</span>
                 <span class="history-timestamp">${new Date(summary.lastUpdatedAt).toLocaleString()}</span>
             </a>
+            <button class="history-item-menu-button" aria-label="\u{30E1}\u{30CB}\u{30E5}\u{30FC}\u{3092}\u{958B}\u{304F}" data-session-id="${summary.id}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            </button>
+            <div class="history-item-popup" id="popup-${summary.id}" style="display: none;">
+                <ul>
+                    <li><button class="popup-delete-button" data-session-id="${summary.id}">\u{524A}\u{9664}</button></li>
+                    <!-- \u{4ED6}\u{306E}\u{30E1}\u{30CB}\u{30E5}\u{30FC}\u{9805}\u{76EE}\u{3082}\u{8FFD}\u{52A0}\u{53EF}\u{80FD} -->
+                </ul>
+            </div>
         </li>
     `).join("");
 }
-function renderConversationTurns(turnsArray) {
+function showHistoryItemPopup(buttonElement, popupElement) {
+    if (activeHistoryPopup && activeHistoryPopup !== popupElement) activeHistoryPopup.style.display = "none";
+    popupElement.style.display = "block";
+    activeHistoryPopup = popupElement;
+    // --- 表示位置調整ロジック ---
+    const viewportHeight = window.innerHeight;
+    const historyItemElement = buttonElement.closest(".history-item"); // ★ 親のli要素を取得
+    if (!historyItemElement) {
+        // 親要素が見つからない場合は何もしない
+        console.error("Could not find parent .history-item for popup positioning.");
+        return;
+    }
+    popupElement.style.top = `${buttonElement.offsetHeight + 20}px`; // ボタンの高さ + 少しオフセット
+    popupElement.style.bottom = "auto"; // bottom指定をリセット
+    popupElement.style.left = "auto"; // left指定をリセット (right:0で制御)
+    // 再度、表示後のポップアップの位置を取得して、下にはみ出ていないかチェック
+    const finalPopupRect = popupElement.getBoundingClientRect();
+    if (finalPopupRect.bottom > viewportHeight - 40) {
+        // 下に40px以上の余裕がない場合
+        // ポップアップの下端をボタンの上端に合わせる
+        popupElement.style.top = "auto";
+        popupElement.style.bottom = `${buttonElement.offsetHeight + 20}px`;
+    }
+}
+function hideActiveHistoryPopup() {
+    if (activeHistoryPopup) {
+        activeHistoryPopup.style.display = "none";
+        activeHistoryPopup = null;
+    }
+}
+function setupDocumentClickListenerForPopups() {
+    document.addEventListener("click", (event)=>{
+        if (activeHistoryPopup) {
+            const popup = activeHistoryPopup; // 参照を保持
+            const isClickInsidePopup = popup.contains(event.target);
+            const isClickOnMenuButton = event.target.closest(".history-item-menu-button");
+            if (!isClickInsidePopup && !isClickOnMenuButton) hideActiveHistoryPopup();
+        }
+    }, true); // キャプチャフェーズで実行して、他のクリックより先に判定する
+}
+function renderConversationTurns(turnsArray, sessionUrl) {
     // originalUrlを引数で受け取る
     if (!turnsArray || turnsArray.length === 0) {
         responseOutput.innerHTML = "<p>\u307E\u3060\u4F1A\u8A71\u304C\u3042\u308A\u307E\u305B\u3093\u3002</p>";
@@ -1844,7 +1949,7 @@ function renderConversationTurns(turnsArray) {
             if (turn.role === "user") {
                 if (index === 0) {
                     // finalPromptそのまま出すと長すぎる
-                    displayContent = "\u63D0\u793A\u3057\u305F\u30C9\u30AD\u30E5\u30E1\u30F3\u30C8\u306B\u3064\u3044\u3066\u8AAC\u660E\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+                    displayContent = `${sessionUrl}\u{306E}\u{5185}\u{5BB9}\u{306B}\u{3064}\u{3044}\u{3066}\u{8AAC}\u{660E}\u{3057}\u{3066}\u{304F}\u{3060}\u{3055}\u{3044}\u{3002}`;
                     const sanitizedText = (0, _dompurifyDefault.default).sanitize(displayContent.replace(/\n/g, "<br>"));
                     turnHtml = `<div class="chat-message user-message initial-request"><div class="message-bubble">${sanitizedText}</div></div>`;
                 } else {
