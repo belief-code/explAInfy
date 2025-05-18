@@ -6,6 +6,7 @@
   flex-grow: 1; /* 残りのスペースを全て使う */
   overflow-y: auto; /* ここでスクロールを有効にする */
   min-height: 0; /* flexアイテムが縮みすぎるのを防ぐ */
+  max-height: 100%;
 
   li {
     margin-bottom: 0; // リストアイテム間のマージンは a タグの padding で調整

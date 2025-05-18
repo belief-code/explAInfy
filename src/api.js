@@ -1,6 +1,6 @@
 import { getApiKey } from "./settings.js";
 
-const GEMINI_MODEL = "gemini-2.5-flash-preview-04-17";
+const GEMINI_MODEL = "gemini-2.0-flash-001";
 const DEFAULT_SYSTEM_PROMPT_PARTS = [
   // システム側の固定指示を配列で管理
   "あなたは公式ドキュメントの内容を解説する専門家です。",
@@ -52,7 +52,7 @@ async function generateSummaryWithGeminiInternal(
   if (!geminiApiKey) {
     return { error: "Gemini APIキーが設定されていません。" };
   }
-
+  const modelToUse = userSettings.geminiModel || GEMINI_MODEL;
   // --- ここでプロンプトエンジニアリングを行う ---
   let promptParts = [...DEFAULT_SYSTEM_PROMPT_PARTS];
 
@@ -107,7 +107,7 @@ async function generateSummaryWithGeminiInternal(
   console.log("Final prompt to Gemini:", finalPrompt); // デバッグ用
 
   // --- Gemini API 呼び出し ---
-  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${geminiApiKey}`;
   const requestBody = { contents: [{ parts: [{ text: finalPrompt }] }] };
 
   try {
@@ -182,14 +182,15 @@ export async function getDocumentSummary(url, userSettings) {
 
 export async function getFollowUpResponse(
   conversationHistory,
-  newQuestionText
+  newQuestionText,
+  userSettings
 ) {
   const geminiApiKey = getApiKey("gemini"); // settings.jsから
   if (!geminiApiKey) {
     return { error: "Gemini APIキーが設定されていません。" };
   }
+  const modelToUse = userSettings.geminiModel || GEMINI_MODEL;
 
-  // 既存の会話履歴からtimestampを除外し、新しい質問を追加
   // conversationHistory は [{role, parts:[{text}]}, ...] の形式を期待
   const contentsForApi = conversationHistory.map((turn) => ({
     role: turn.role,
@@ -224,7 +225,7 @@ export async function getFollowUpResponse(
     JSON.stringify(requestBody, null, 2)
   );
 
-  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${geminiApiKey}`;
   try {
     const response = await fetch(geminiApiUrl, {
       method: "POST",

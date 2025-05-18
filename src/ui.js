@@ -16,6 +16,9 @@ const logoLink = document.getElementById("logo-link");
 const modalGeminiApiKeyInput = document.getElementById(
   "modal-gemini-api-key-input"
 );
+const modalGeminiModelInput = document.getElementById(
+  "modal-gemini-model-input"
+);
 const modalJinaApiKeyInput = document.getElementById(
   "modal-jina-api-key-input"
 );
@@ -97,6 +100,7 @@ export function getSettingsFromModalForm() {
   return {
     geminiApiKey: modalGeminiApiKeyInput.value.trim(),
     jinaApiKey: modalJinaApiKeyInput.value.trim(),
+    geminiModel: modalGeminiModelInput.value.trim(),
     userLevel: parseInt(selectedUserLevel, 10),
     userLevelText: modalUserLevelText.value.trim(),
     additionalPrompt: modalAdditionalPromptInput.value.trim(),
@@ -104,6 +108,7 @@ export function getSettingsFromModalForm() {
 }
 export function populateModalFormWithSettings(settings) {
   modalGeminiApiKeyInput.value = settings.geminiApiKey || "";
+  modalGeminiModelInput.value = settings.geminiModel || "";
   modalJinaApiKeyInput.value = settings.jinaApiKey || "";
   modalUserLevelRadios.forEach((radio) => {
     radio.checked = radio.value === String(settings.userLevel);
@@ -276,7 +281,7 @@ export function setupDocumentClickListenerForPopups() {
 export function renderConversationTurns(turnsArray, sessionUrl) {
   // originalUrlを引数で受け取る
   if (!turnsArray || turnsArray.length === 0) {
-    responseOutput.innerHTML = "<p>まだ会話がありません。</p>";
+    responseOutput.innerHTML = "";
     return;
   }
 

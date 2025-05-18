@@ -4,8 +4,7 @@
   padding: $spacing-lg;
   display: flex; /* Flexコンテナにする */
   flex-direction: column; /* 子要素を縦に積む */
-  height: 100%; /* 親のGridトラックの高さいっぱいを使う */
-  box-sizing: border-box; /* paddingを含めて高さを計算 */
+  overflow: hidden;
 
   h2 {
     // サイドバー内の見出し (例: "履歴")

@@ -1,9 +1,11 @@
 const SETTINGS_STORAGE_KEY = "ExplAInfySettings";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-preview-04-17";
 
 // モジュール内のプライベートな状態として設定を保持
 let currentSettings = {
   jinaApiKey: "",
   geminiApiKey: "",
+  geminiModel: DEFAULT_GEMINI_MODEL,
   userLevel: 1,
   userLevelText: "",
   additionalPrompt: "",
@@ -13,6 +15,7 @@ let currentSettings = {
 const defaultSettings = {
   jinaApiKey: "",
   geminiApiKey: "",
+  geminiModel: DEFAULT_GEMINI_MODEL,
   userLevel: 1,
   userLevelText: "",
   additionalPrompt: "",
@@ -28,6 +31,9 @@ export function initializeSettings() {
     try {
       const savedSettings = JSON.parse(savedSettingsString);
       currentSettings = { ...defaultSettings, ...savedSettings };
+      if (currentSettings.geminiModel === "") {
+        currentSettings.geminiModel = DEFAULT_GEMINI_MODEL;
+      }
     } catch (e) {
       console.error("Failed to parse settings from localStorage", e);
       currentSettings = { ...defaultSettings };
@@ -60,12 +66,20 @@ export function getApiKey(type) {
   }
   return "";
 }
+// Geminiモデル名を取得する
+export function getGeminiModel() {
+  // 空文字列の場合はデフォルトを返すようにする
+  return currentSettings.geminiModel || DEFAULT_GEMINI_MODEL;
+}
 
 /**
  * 新しい設定オブジェクトを受け取り、現在の設定を更新してローカルストレージに保存する。
  * @param {object} newSettings - 保存する新しい設定オブジェクト
  */
 export function saveSettings(newSettings) {
+  if (newSettings.geminiModel === "") {
+    newSettings.geminiModel = DEFAULT_GEMINI_MODEL;
+  }
   // newSettings の中身を検証・サニタイズしてもいい
   currentSettings = { ...currentSettings, ...newSettings }; // 部分的な更新も許容
   try {

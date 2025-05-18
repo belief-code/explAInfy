@@ -82,7 +82,7 @@ function setupEventListeners() {
       currentActiveSession = null;
       ui.showPage(urlInputSection);
       urlTextarea.value = ""; // URL入力欄もクリアする (任意)
-      // もし応答画面の内容もクリアしたいなら、ui.renderConversationTurns([]) などを呼ぶ
+      ui.renderConversationTurns([]);
       ui.updateResponseTitle("説明結果"); // タイトルもリセット
     });
   }
@@ -341,11 +341,11 @@ async function handleAdditionalQuestion() {
         role: turn.role,
         parts: turn.parts.map((p) => ({ text: p.text })),
       }));
-
+    const userSettings = getSettings();
     const result = await api.getFollowUpResponse(
       historyForApi,
       newQuestionText,
-      getSettings()
+      userSettings
     );
 
     if (result.error) {
@@ -371,7 +371,6 @@ async function handleAdditionalQuestion() {
   } catch (error) {
     console.error("追加質問処理中にエラー:", error);
     ui.displayErrorMessage("追加質問の処理中に予期せぬエラーが発生しました。");
-    // 必要なら currentTurns から最後のユーザー質問を削除
   } finally {
     isWaitingForAIResponse = false;
     submitAdditionalQuestionButton.disabled = false;
