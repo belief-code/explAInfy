@@ -1,0 +1,53 @@
+.app-header {
+  // grid-area は _layout.scss で定義済み
+  display: flex;
+  padding: 0 $spacing-lg;
+  justify-content: space-between;
+  align-items: center;
+
+  .app-logo-link {
+    text-decoration: none;
+    display: inline-block; // クリック範囲を適切にするため
+
+    &.hidden-on-main {
+      visibility: hidden;
+    }
+
+    .app-logo {
+      font-size: $font-size-logo;
+      font-weight: $font-weight-semibold;
+      margin: 0; // h1のデフォルトマージンをリセット
+      color: $color-text-heading;
+
+      .ai-red {
+        color: $color-accent-ai;
+      }
+    }
+  }
+
+  // 設定ボタンのコンテナやアイコン自体のスタイル
+  // #setting-button はIDセレクタなので、そのまま書くか、
+  // もしクラスベースにしたいなら .settings-trigger のようなクラスをHTMLに付与
+  #setting-button {
+    // もしくは .app-header__settings-button のようなBEMクラス
+    width: 28px; // 変数化も検討 $icon-size-medium: 28px;
+    height: 28px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+
+    img {
+      // SVGアイコンをimgタグで使っている場合
+      display: block;
+      width: 100%;
+      height: 100%;
+      // filter: grayscale(100%) brightness(50%); // アイコンの色を変えたい場合の一例
+    }
+
+    &:hover {
+      background-color: rgba($color-text-base, 0.1); // ホバー時の背景 (任意)
+      border-radius: $border-radius-circle;
+    }
+  }
+}

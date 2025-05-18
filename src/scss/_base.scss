@@ -1,0 +1,116 @@
+//--------------------------------------------------------------------------
+// HTML & Body Defaults
+//--------------------------------------------------------------------------
+html {
+  box-sizing: border-box; // borderとpaddingをwidth/heightに含める
+  font-size: $font-size-base; // ルートのフォントサイズ (rem単位の基準)
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit; // 全ての要素にbox-sizingを継承
+}
+
+body {
+  font-family: $font-family-base;
+  margin: 0;
+  background-color: $color-bg-body;
+  color: $color-text-base;
+  line-height: $line-height-base;
+  -webkit-font-smoothing: antialiased; // フォントのスムージング
+  -moz-osx-font-smoothing: grayscale;
+}
+
+//--------------------------------------------------------------------------
+// Basic Typography
+// (コンポーネント内の見出しは別途スタイル指定するが、汎用的なものを定義)
+//--------------------------------------------------------------------------
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin-top: $spacing-lg; // 上下の基本マージン
+  margin-bottom: $spacing-md;
+  font-weight: $font-weight-semibold;
+  line-height: $line-height-heading;
+  color: $color-text-heading;
+}
+
+// アプリケーション特有のh1, h2の基本サイズ (Markdown内とは区別するため)
+// .app-logo や .url-input-title, #response-section h2 は個別のファイルで上書き/詳細指定
+h1 {
+  font-size: $font-size-h1 * 0.8;
+}
+h2 {
+  font-size: $font-size-h2 * 0.8;
+}
+h3 {
+  font-size: $font-size-h3;
+}
+// ...
+
+p {
+  margin-top: 0;
+  margin-bottom: $spacing-md;
+}
+
+a {
+  color: $color-text-link;
+  text-decoration: none; // 基本は下線なし
+
+  &:hover {
+    text-decoration: underline; // ホバーで下線
+    color: darken($color-text-link, 10%); // 少し暗くする (Sassの関数)
+  }
+}
+
+//--------------------------------------------------------------------------
+// Lists (基本的なスタイル)
+//--------------------------------------------------------------------------
+ul,
+ol {
+  margin-top: 0;
+  margin-bottom: $spacing-md;
+  padding-left: $spacing-lg; // デフォルトのインデント
+}
+
+li {
+  margin-bottom: $spacing-xs;
+}
+
+//--------------------------------------------------------------------------
+// Images & Media
+//--------------------------------------------------------------------------
+img,
+video,
+svg {
+  max-width: 100%;
+  height: auto;
+  display: block; // imgの下にできる余白対策
+}
+
+//--------------------------------------------------------------------------
+// Forms (非常に基本的なものだけ、詳細は _forms.scss へ)
+//--------------------------------------------------------------------------
+button,
+input,
+textarea,
+select {
+  font-family: inherit; // bodyのフォントを継承
+  font-size: inherit;
+  line-height: inherit;
+}
+
+//--------------------------------------------------------------------------
+// Other global helpers or resets
+//--------------------------------------------------------------------------
+
+// 必須マークの共通スタイル (汎用的なのでここに置く)
+.required-asterisk {
+  color: $color-error;
+  margin-left: $spacing-xs;
+  font-weight: $font-weight-bold;
+}

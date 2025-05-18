@@ -1,0 +1,57 @@
+//--------------------------------------------------------------------------
+// Application Shell (全体のラッパー)
+//--------------------------------------------------------------------------
+.app-shell {
+  display: grid;
+  grid-template-rows: $app-header-height 1fr; // ヘッダー高さ固定、残りがボディ
+  grid-template-areas:
+    "appheader"
+    "appbody";
+  height: 100vh; // ビューポート全体の高さを占める
+  width: 100vw; // ビューポート全体の幅を占める
+  overflow: hidden; // ページ全体のスクロールバーを基本的に出さない
+}
+
+//--------------------------------------------------------------------------
+// Application Header Area (Gridアイテムとしての配置)
+//--------------------------------------------------------------------------
+.app-header {
+  grid-area: appheader;
+  // ヘッダー自体の詳細なスタイル (背景色、paddingなど) は _header.scss で定義
+}
+
+//--------------------------------------------------------------------------
+// Application Body Container (ヘッダー下のメイン領域、3カラムの親)
+//--------------------------------------------------------------------------
+.app-body-container {
+  grid-area: appbody;
+  display: grid;
+  grid-template-columns: $sidebar-width 1fr $sidebar-width; // 左、中央、右の幅定義
+  // grid-template-rows: 1fr; // 暗黙的に1行で、高さは親エリア(.app-shellの1fr部分)に依存するため、通常は不要
+  grid-template-areas: "leftsidebar maincontent rightsidebar"; // 各エリアの名前付け
+  overflow: hidden; // このコンテナ自体もはみ出さないように
+  gap: 0; // グリッドアイテム間のデフォルトの隙間 (必要なら $spacing-md などで設定)
+  background-color: $color-bg-body; // ボディコンテナ全体の背景色
+}
+
+//--------------------------------------------------------------------------
+// Sidebar Areas (Gridアイテムとしての配置)
+//--------------------------------------------------------------------------
+.sidebar {
+  // 左右のサイドバーに共通する基本スタイル
+}
+
+.left-sidebar {
+  grid-area: leftsidebar;
+}
+
+.right-sidebar {
+  grid-area: rightsidebar;
+}
+
+//--------------------------------------------------------------------------
+// Main Content Column (中央コンテンツエリア、Gridアイテムとしての配置)
+//--------------------------------------------------------------------------
+.main-content-column {
+  grid-area: maincontent;
+}

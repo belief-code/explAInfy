@@ -1,0 +1,144 @@
+//----------------------------------------------------
+// Response Section (#response-section)
+//----------------------------------------------------
+#response-section {
+  // または .response-area
+  &.active {
+    // .page-section.active の display:flex; flex-direction:column; を継承・利用
+    overflow: hidden; // 内部スクロールのため
+  }
+
+  h2#response-title {
+    // または .response-area__title
+    margin: 0 0 $spacing-lg 0;
+    padding-bottom: $spacing-md;
+    border-bottom: 1px solid $color-border-base;
+    font-size: $font-size-h2 * 0.9;
+    color: $color-text-heading;
+    flex-shrink: 0;
+  }
+}
+
+.response-content-wrapper {
+  // または .response-area__content-wrapper
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-bottom: $spacing-md;
+  min-height: 0; // Flexアイテムが縮むために重要
+}
+
+.fixed-bottom-input {
+  // または .response-area__chat-input-area
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: $spacing-sm 0; // 上下のみ、左右は親(.main-content-column)のpaddingを利用
+
+  min-height: $chat-input-area-min-height;
+
+  // 追加質問用textareaのスタイル
+  textarea#additional-question-input {
+    // .response-area__additional-textarea
+    // _forms.scss の .url-textarea のスタイルをここに移動・統合、または一部上書き
+    flex-grow: 1;
+    width: auto; // flex-grow があるのでautoで良い
+    min-height: calc(
+      #{$line-height-base} * 1em * 1.6 + #{$spacing-sm} * 2
+    ); // 2行基本
+    padding: $spacing-sm + 6px ($spacing-xl + $spacing-md) $spacing-sm + 6px
+      $spacing-lg; // 右パディングをボタン幅分
+    border-radius: $border-radius-pill * 0.9;
+    border: 1px solid $color-border-input;
+    font-size: $font-size-base;
+    line-height: $line-height-base;
+    box-sizing: border-box;
+    resize: none;
+    overflow-y: auto;
+    max-height: 10em;
+    transition: $transition-base;
+    margin: 0 $spacing-sm; // 左右に少しマージン
+
+    &:focus,
+    &:focus-visible {
+      outline: none;
+      border-color: $color-primary;
+      box-shadow: 0 0 0 3px rgba($color-primary, 0.3);
+    }
+    &::placeholder {
+      color: lighten($color-text-base, 40%);
+      opacity: 1;
+    }
+  }
+
+  // 送信ボタンの配置
+  .custom-submit-button {
+    position: absolute;
+    right: $spacing-md - 6px + $spacing-sm; // 親の左右paddingとtextareaのmarginを考慮
+    bottom: $spacing-sm + 7px;
+  }
+}
+
+//----------------------------------------------------
+// Chat Message Bubbles
+//----------------------------------------------------
+.chat-message {
+  display: flex;
+  margin-bottom: $spacing-md;
+  max-width: 85%;
+
+  &.user-message {
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+  &.model-message {
+    justify-content: flex-start;
+    margin-right: auto;
+  }
+}
+
+.message-bubble {
+  padding: $spacing-sm $spacing-md;
+  border-radius: 11px;
+  line-height: $line-height-base;
+  word-wrap: break-word;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+
+  // ネストを使って、親の .user-message または .model-message に応じてスタイルを適用
+  .user-message & {
+    background-color: $color-bg-user-message;
+    color: $color-text-base;
+    border-top-right-radius: $spacing-xs;
+  }
+  .model-message & {
+    background-color: $color-bg-model-message;
+    color: $color-text-base;
+    border: 1px solid $color-border-modal-message; // 変数名がmodalだが、汎用ボーダーとして使うか見直し
+    border-top-left-radius: $spacing-xs;
+  }
+  .model-message.error-rendering & {
+    background-color: lighten($color-error, 45%);
+    color: darken($color-error, 10%);
+    border: 1px solid lighten($color-error, 20%);
+  }
+
+  // マークダウン要素のマージンリセット (吹き出し内の最初と最後)
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  ul,
+  ol,
+  pre,
+  blockquote {
+    &:first-child {
+      margin-top: 0;
+    }
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
