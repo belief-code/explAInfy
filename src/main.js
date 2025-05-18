@@ -8,6 +8,9 @@ import {
 } from "./settings.js";
 import * as ui from "./ui.js";
 
+// 追加質問管理用GeminiAPI応答待ちフラグ
+let isWaitingForAIResponse = false;
+
 // --- DOM要素のキャッシュ (ページロード時に一度だけ取得) ---
 // 主要なセクション
 const urlInputSection = document.getElementById("url-input-section");
@@ -35,13 +38,13 @@ const saveModalSettingsButton = document.getElementById(
 );
 const modalTabs = document.querySelectorAll(".modal-tabs .tab-item");
 const tabContents = document.querySelectorAll(".modal__content .tab-content");
-let currentActiveSessionId = null;
-let currentTurns = []; //現在の会話のターンを保持する配列
+let currentActiveSession = null;
 
 // --- 初期化処理 ---
 document.addEventListener("DOMContentLoaded", async () => {
   initializeSettings(); // settings.js の初期化を呼ぶ
   ui.initializeUI(); // ui.js のUI初期化を呼ぶ
+  ui.setupDocumentClickListenerForPopups();
   ui.initializeTextareaAutoHeight(
     document.getElementById("additional-question-input"),
     1
@@ -59,6 +62,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // イベントリスナー関係
 function setupEventListeners() {
+  // 設定ボタン押下時イベント
   if (settingButton) {
     settingButton.addEventListener("click", () => {
       ui.populateModalFormWithSettings(getSettings());
@@ -66,16 +70,58 @@ function setupEventListeners() {
     });
   }
 
+  // モーダルウィンドウ保存ボタン押下時イベント
   if (saveModalSettingsButton) {
     saveModalSettingsButton.addEventListener("click", handleSaveSettings);
   }
 
+  // ページ左上ExplAInfyロゴ押下時イベント
   if (logoLink) {
     logoLink.addEventListener("click", (event) => {
       event.preventDefault();
       ui.showPage(urlInputSection);
     });
   }
+
+  // 履歴ポップアップ設定イベント
+  if (historyListElement) {
+    // 履歴アイテム内のメニューボタンクリック
+    historyListElement.addEventListener("click", (event) => {
+      const menuButton = event.target.closest(".history-item-menu-button");
+      if (menuButton) {
+        event.stopPropagation(); // 他のクリックリスナーへの伝播を防ぐ
+        const sessionId = menuButton.dataset.sessionId;
+        const popupElement = document.getElementById(`popup-${sessionId}`);
+        if (popupElement) {
+          if (popupElement.style.display === "block") {
+            ui.hideActiveHistoryPopup();
+          } else {
+            ui.showHistoryItemPopup(menuButton, popupElement);
+          }
+        }
+        return; // メニューボタンクリック時は以降の処理をしない
+      }
+
+      // 削除ボタンクリック
+      const deleteButton = event.target.closest(".popup-delete-button");
+      if (deleteButton) {
+        event.stopPropagation();
+        const sessionIdToDelete = deleteButton.dataset.sessionId;
+        handleDeleteSession(sessionIdToDelete);
+        ui.hideActiveHistoryPopup(); // 削除後はポップアップを隠す
+        return;
+      }
+
+      // 履歴アイテム本体のクリック (既存のロジック)
+      const link = event.target.closest("a.history-link[data-session-id]");
+      if (link && !menuButton && !deleteButton) {
+        // メニューや削除ボタン以外がクリックされた場合
+        // ... (既存の履歴読み込み処理) ...
+        ui.hideActiveHistoryPopup(); // 他のポップアップが開いていれば隠す
+      }
+    });
+  }
+  // 履歴押下時イベント
   if (historyListElement) {
     historyListElement.addEventListener("click", async (event) => {
       const link = event.target.closest("a[data-session-id]");
@@ -90,25 +136,29 @@ function setupEventListeners() {
 
       try {
         const sessionData = await db.getSession(sessionId);
-        if (sessionData && sessionData.turns) {
-          currentActiveSessionId = sessionId;
-          currentTurns = sessionData.turns;
-          ui.renderConversationTurns(currentTurns);
-          ui.updateResponseTitle(sessionData.originalTitle || "説明結果");
+        if (sessionData) {
+          currentActiveSession = sessionData;
+          ui.renderConversationTurns(
+            currentActiveSession.turns,
+            currentActiveSession.originalUrl
+          );
+          ui.updateResponseTitle(
+            currentActiveSession.originalTitle || "説明結果",
+            currentActiveSession.originalUrl
+          );
         } else {
           ui.displayErrorMessage("選択された履歴の読み込みに失敗しました。");
-          currentActiveSessionId = null;
-          currentTurns = [];
+          currentActiveSession = null;
         }
       } catch (error) {
         console.error("履歴の読み込み中にエラー:", error);
         ui.displayErrorMessage("履歴の読み込み中にエラーが発生しました。");
-        currentActiveSessionId = null;
-        currentTurns = [];
+        currentActiveSession = null;
       }
     });
   }
 
+  // URL入力画面送信ボタン押下時イベント
   if (submitButton && urlTextarea) {
     submitButton.addEventListener("click", handleSubmit);
     urlTextarea.addEventListener("keydown", (event) => {
@@ -120,6 +170,7 @@ function setupEventListeners() {
     });
   }
 
+  // 追加質問送信ボタン押下時イベント
   if (submitAdditionalQuestionButton && additionalQuestionTextarea) {
     submitAdditionalQuestionButton.addEventListener(
       "click",
@@ -133,6 +184,7 @@ function setupEventListeners() {
     });
   }
 
+  // モーダルウィンドウタブ押下時イベント
   modalTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       modalTabs.forEach((t) => t.classList.remove("active-tab"));
@@ -145,9 +197,12 @@ function setupEventListeners() {
     });
   });
 }
+
+// 履歴更新＆表示用関数
 async function updateAndRenderHistory() {
   try {
     const summaries = await db.getAllSessionSummaries();
+    console.log(summaries);
     ui.renderHistoryList(summaries);
   } catch (error) {
     console.error("履歴の取得または表示に失敗しました:", error);
@@ -155,6 +210,7 @@ async function updateAndRenderHistory() {
   }
 }
 
+// URL送信時間数
 async function handleSubmit() {
   if (!getApiKey("jina") || !getApiKey("gemini")) {
     alert("APIキーを入力してください");
@@ -171,7 +227,6 @@ async function handleSubmit() {
   ui.displayLoadingMessage();
   ui.showPage(document.getElementById("response-section"));
   const newSessionId = crypto.randomUUID(); // UUIDを生成
-  currentActiveSessionId = newSessionId; // 現在のセッションIDとして保持 (main.js内の変数)
   try {
     const userSettings = getSettings();
     const summaryResult = await api.getDocumentSummary(
@@ -182,25 +237,31 @@ async function handleSubmit() {
     if (summaryResult.error) {
       ui.displayErrorMessage(summaryResult.error);
     } else {
-      ui.updateResponseTitle(summaryResult.title || "説明結果");
       const userTurnContent =
         summaryResult.actualPromptSentToLLM ||
         `ドキュメント: ${urlToProcess} の説明を依頼`;
       const modelTurnContent = summaryResult.summaryMarkdown;
 
-      currentTurns = [
+      const initialTurns = [
         { role: "user", parts: [{ text: userTurnContent }] },
         { role: "model", parts: [{ text: modelTurnContent }] },
       ];
-      const sessionData = {
-        id: currentActiveSessionId,
+      currentActiveSession = {
+        id: newSessionId,
         originalUrl: urlToProcess,
-        originalTitle: summaryResult.title,
+        originalTitle: summaryResult.title || "説明結果",
         createdAt: Date.now(),
-        turns: currentTurns, // 現在のturnsを保存
+        turns: initialTurns,
       };
-      await db.saveOrUpdateSession(sessionData);
-      ui.renderConversationTurns(currentTurns); // UIにも反映
+      await db.saveOrUpdateSession(currentActiveSession); // lastUpdatedAtはここで付与される
+      ui.updateResponseTitle(
+        currentActiveSession.originalTitle,
+        currentActiveSession.originalUrl
+      );
+      ui.renderConversationTurns(
+        currentActiveSession.turns,
+        currentActiveSession.originalUrl
+      );
       await updateAndRenderHistory();
     }
   } catch (error) {
@@ -209,6 +270,7 @@ async function handleSubmit() {
   }
 }
 
+// 設定保存用関数
 function handleSaveSettings() {
   const newSettings = ui.getSettingsFromModalForm();
   if (newSettings) {
@@ -228,8 +290,14 @@ function handleSaveSettings() {
   }
   ui.closeSettingsModal();
 }
+
+// 追加質問送信用関数
 async function handleAdditionalQuestion() {
-  if (!currentActiveSessionId) {
+  if (isWaitingForAIResponse) {
+    console.log("現在AIの応答待ちです。連続送信はできません。");
+    return; // 処理中なら何もしない
+  }
+  if (!currentActiveSession) {
     alert("まず最初の質問を行うか、履歴から会話を選択してください。");
     return;
   }
@@ -246,74 +314,92 @@ async function handleAdditionalQuestion() {
     ui.openSettingsModal();
     return;
   }
-
+  isWaitingForAIResponse = true;
+  submitAdditionalQuestionButton.disabled = true;
   // UIにユーザーの質問を即時反映 (送信中であることが分かるように)
-  const userTurnForUI = {
+  const userTurnForMemory = {
     role: "user",
     parts: [{ text: newQuestionText }],
-    timestamp: Date.now(),
   };
-  currentTurns.push(userTurnForUI);
-  ui.renderConversationTurns(currentTurns); // 新しい質問をUIに追加
+  currentActiveSession.turns.push(userTurnForMemory);
+  ui.renderConversationTurns(
+    currentActiveSession.turns,
+    currentActiveSession.originalUrl
+  );
   additionalQuestionTextarea.value = ""; // 入力欄クリア
   ui.displayLoadingMessage("<p>AIが応答を考えています...</p>"); // ローディング表示を応答エリアの末尾に
 
   try {
-    const userSettings = getSettings();
-    // APIに渡す履歴からはtimestampを除く
-    const historyForApi = currentTurns.slice(0, -1).map((turn) => ({
-      // 最後に追加したUI用ユーザーターンを除く
-      role: turn.role,
-      parts: turn.parts.map((p) => ({ text: p.text })),
-    }));
+    const historyForApi = currentActiveSession.turns
+      .slice(0, -1)
+      .map((turn) => ({
+        role: turn.role,
+        parts: turn.parts.map((p) => ({ text: p.text })),
+      }));
 
     const result = await api.getFollowUpResponse(
       historyForApi,
       newQuestionText,
-      userSettings
+      getSettings()
     );
 
     if (result.error) {
       ui.displayErrorMessage(result.error);
-      currentTurns.pop(); // 送信失敗したのでUIからユーザーの質問を削除 (またはエラー表示に置き換える)
-      ui.renderConversationTurns(currentTurns); // UI更新
+      currentActiveSession.turns.pop(); // 送信失敗したのでメモリから削除
+      ui.renderConversationTurns(
+        currentActiveSession.turns,
+        currentActiveSession.originalUrl
+      );
     } else {
-      const modelTurnForStorage = {
+      const modelTurnForMemory = {
         role: "model",
         parts: [{ text: result.modelResponseMarkdown }],
-        timestamp: Date.now(),
       };
-      // currentTurns の最後の要素 (UIに表示したユーザーの質問) の後にモデルの応答を追加
-      // currentTurns.pop(); // UI用に追加したユーザーの質問を一度削除し、API応答と一緒にDB保存用の形式で再追加する
-      // 上記だとtimestampがずれるので、メモリ上のcurrentTurnsはそのままにして、
-      // DB保存時はAPIに送ったnewQuestionTextとAPIからの応答をペアにする
-      currentTurns[currentTurns.length - 1] = {
-        // 最後にUIに追加したユーザーの質問を更新(timestampはそのまま)
-        role: "user",
-        parts: [{ text: newQuestionText }],
-        timestamp: userTurnForUI.timestamp, // 送信した質問を確定
-      };
-      currentTurns.push(modelTurnForStorage);
-
-      // DBに保存
-      const sessionToUpdate = await db.getSession(currentActiveSessionId);
-      if (sessionToUpdate) {
-        sessionToUpdate.turns = currentTurns.map((turn) => ({
-          // DB保存用にはtimestampを含める
-          role: turn.role,
-          parts: turn.parts, // partsはそのまま
-          timestamp: turn.timestamp || Date.now(), // なければ現在の時刻
-        }));
-        await db.saveOrUpdateSession(sessionToUpdate);
-      }
-      ui.renderConversationTurns(currentTurns); // 全体を再描画
-      await updateAndRenderHistory(); // 履歴リストも更新
+      currentActiveSession.turns.push(modelTurnForMemory); // メモリ上のセッションを更新
+      await db.saveOrUpdateSession(currentActiveSession); // 更新されたセッション全体をDBに保存
+      ui.renderConversationTurns(
+        currentActiveSession.turns,
+        currentActiveSession.originalUrl
+      );
+      await updateAndRenderHistory();
     }
   } catch (error) {
     console.error("追加質問処理中にエラー:", error);
     ui.displayErrorMessage("追加質問の処理中に予期せぬエラーが発生しました。");
     // 必要なら currentTurns から最後のユーザー質問を削除
   } finally {
-    // ローディング解除 (エラーでも成功でも responseOutput は上書きされるので不要かも)
+    isWaitingForAIResponse = false;
+    submitAdditionalQuestionButton.disabled = false;
+  }
+}
+
+// 履歴消去用関数
+async function handleDeleteSession(sessionId) {
+  if (!sessionId) return;
+
+  const sessionToDelete = await db.getSession(sessionId); // 削除対象の情報を取得 (タイトル確認用)
+  const title = sessionToDelete
+    ? sessionToDelete.originalTitle || "このセッション"
+    : "選択されたセッション";
+
+  if (confirm(`「${title}」を削除してもよろしいですか？`)) {
+    try {
+      await db.deleteSession(sessionId);
+      console.log(`Session ${sessionId} deleted.`);
+      await updateAndRenderHistory(); // 履歴リストを更新
+
+      // もし削除したセッションが現在表示中のものだったら、UIをクリアする
+      if (currentActiveSession && currentActiveSession.id === sessionId) {
+        currentActiveSession = null;
+        // currentTurns = []; // currentTurnsもリセットした方が安全
+        ui.showPage(urlInputSection); // URL入力画面に戻すなど
+        ui.updateResponseTitle("説明結果"); // タイトルリセット
+        ui.renderConversationTurns([]); // 応答エリアクリア
+      }
+      alert(`「${title}」を削除しました。`);
+    } catch (error) {
+      console.error("セッションの削除中にエラー:", error);
+      alert("セッションの削除中にエラーが発生しました。");
+    }
   }
 }

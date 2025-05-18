@@ -2,12 +2,14 @@ import DOMPurify from "dompurify";
 import { marked } from "marked";
 import MicroModal from "micromodal";
 
+let activeHistoryPopup = null; // 現在開いているポップアップを管理
 // --- DOM要素のキャッシュ ---
 const urlInputSection = document.getElementById("url-input-section");
 const historyListElement = document.getElementById("history-list");
 const responseSection = document.getElementById("response-section");
 const responseOutput = document.getElementById("response-output");
-const responseTitle = document.getElementById("response-title");
+const responseTitleLink = document.getElementById("response-title-link");
+const responseTitleHeading = document.getElementById("response-title");
 const logoLink = document.getElementById("logo-link");
 
 // モーダル関連の要素 (モーダル制御とフォーム値設定に使う)
@@ -146,17 +148,28 @@ export function initializeTextareaAutoHeight(textareaElement, initialRows) {
     textareaElement.style.height = `${newHeight}px`;
   });
 }
-export function updateResponseTitle(titleText) {
-  if (responseTitle) {
-    // responseTitle要素がHTMLに存在することを確認
-    responseTitle.textContent = titleText;
+export function updateResponseTitle(titleText, url = null) {
+  // urlも引数で受け取る
+  if (responseTitleHeading) {
+    responseTitleHeading.textContent = titleText || "説明結果";
   } else {
-    console.warn("#response-title element not found.");
+    console.warn("#response-title (h2) element not found.");
+  }
+
+  if (responseTitleLink) {
+    if (url) {
+      responseTitleLink.href = url;
+      responseTitleLink.style.display = "block"; // 表示する
+    } else {
+      responseTitleLink.href = "#"; // URLがない場合はリンクを無効化（または非表示）
+      responseTitleLink.style.display = "none"; // URLがないならリンクごと隠すのも手
+    }
+  } else {
+    console.warn("#response-title-link (a) element not found.");
   }
 }
-
 export function displayLoadingMessage(message = "<p>処理中...</p>") {
-  responseOutput.innerHTML = message;
+  responseOutput.innerHTML += message;
 }
 
 export function displayErrorMessage(errorMessageText) {
@@ -166,7 +179,6 @@ export function displayErrorMessage(errorMessageText) {
 // アプリケーション起動時に行うUI関連の初期化 (main.js から呼び出す)
 export function initializeUI() {
   initializeModal();
-  // 他のUI初期化があればここに
 }
 
 export function renderHistoryList(sessionSummaries) {
@@ -179,17 +191,89 @@ export function renderHistoryList(sessionSummaries) {
   historyListElement.innerHTML = sessionSummaries
     .map(
       (summary) => `
-        <li>
-            <a href="#" data-session-id="${summary.id}">
+        <li class="history-item">
+            <a href="#" class="history-link" data-session-id="${summary.id}">
                 <span class="history-title">${summary.title || "無題のセッション"}</span>
                 <span class="history-timestamp">${new Date(summary.lastUpdatedAt).toLocaleString()}</span>
             </a>
+            <button class="history-item-menu-button" aria-label="メニューを開く" data-session-id="${summary.id}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            </button>
+            <div class="history-item-popup" id="popup-${summary.id}" style="display: none;">
+                <ul>
+                    <li><button class="popup-delete-button" data-session-id="${summary.id}">削除</button></li>
+                    <!-- 他のメニュー項目も追加可能 -->
+                </ul>
+            </div>
         </li>
     `
     )
     .join("");
 }
-export function renderConversationTurns(turnsArray) {
+// ポップアップを表示する関数 (位置調整もここで行う)
+export function showHistoryItemPopup(buttonElement, popupElement) {
+  if (activeHistoryPopup && activeHistoryPopup !== popupElement) {
+    activeHistoryPopup.style.display = "none";
+  }
+
+  popupElement.style.display = "block";
+  activeHistoryPopup = popupElement;
+
+  // --- 表示位置調整ロジック ---
+  const viewportHeight = window.innerHeight;
+  const historyItemElement = buttonElement.closest(".history-item"); // ★ 親のli要素を取得
+
+  if (!historyItemElement) {
+    // 親要素が見つからない場合は何もしない
+    console.error("Could not find parent .history-item for popup positioning.");
+    return;
+  }
+
+  popupElement.style.top = `${buttonElement.offsetHeight + 20}px`; // ボタンの高さ + 少しオフセット
+  popupElement.style.bottom = "auto"; // bottom指定をリセット
+  popupElement.style.left = "auto"; // left指定をリセット (right:0で制御)
+
+  // 再度、表示後のポップアップの位置を取得して、下にはみ出ていないかチェック
+  const finalPopupRect = popupElement.getBoundingClientRect();
+
+  if (finalPopupRect.bottom > viewportHeight - 40) {
+    // 下に40px以上の余裕がない場合
+    // ポップアップの下端をボタンの上端に合わせる
+    popupElement.style.top = "auto";
+    popupElement.style.bottom = `${buttonElement.offsetHeight + 20}px`;
+  }
+}
+
+// ポップアップを隠す関数
+export function hideActiveHistoryPopup() {
+  if (activeHistoryPopup) {
+    activeHistoryPopup.style.display = "none";
+    activeHistoryPopup = null;
+  }
+}
+
+// ドキュメント全体のクリックでポップアップを閉じるイベントリスナー (initializeUIなどで一度だけ設定)
+export function setupDocumentClickListenerForPopups() {
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (activeHistoryPopup) {
+        const popup = activeHistoryPopup; // 参照を保持
+        const isClickInsidePopup = popup.contains(event.target);
+        const isClickOnMenuButton = event.target.closest(
+          ".history-item-menu-button"
+        );
+
+        if (!isClickInsidePopup && !isClickOnMenuButton) {
+          hideActiveHistoryPopup();
+        }
+      }
+    },
+    true
+  ); // キャプチャフェーズで実行して、他のクリックより先に判定する
+}
+
+export function renderConversationTurns(turnsArray, sessionUrl) {
   // originalUrlを引数で受け取る
   if (!turnsArray || turnsArray.length === 0) {
     responseOutput.innerHTML = "<p>まだ会話がありません。</p>";
@@ -212,7 +296,7 @@ export function renderConversationTurns(turnsArray) {
       if (turn.role === "user") {
         if (index === 0) {
           // finalPromptそのまま出すと長すぎる
-          displayContent = "提示したドキュメントについて説明してください。";
+          displayContent = `${sessionUrl}の内容について説明してください。`;
           const sanitizedText = DOMPurify.sanitize(
             displayContent.replace(/\n/g, "<br>")
           );
