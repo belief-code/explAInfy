@@ -79,7 +79,11 @@ function setupEventListeners() {
   if (logoLink) {
     logoLink.addEventListener("click", (event) => {
       event.preventDefault();
+      currentActiveSession = null;
       ui.showPage(urlInputSection);
+      urlTextarea.value = ""; // URL入力欄もクリアする (任意)
+      // もし応答画面の内容もクリアしたいなら、ui.renderConversationTurns([]) などを呼ぶ
+      ui.updateResponseTitle("説明結果"); // タイトルもリセット
     });
   }
 
@@ -267,6 +271,7 @@ async function handleSubmit() {
   } catch (error) {
     console.error("getDocumentSummary 呼び出し中にエラー:", error);
     ui.displayErrorMessage("予期せぬエラーが発生しました。");
+    currentActiveSession = null; // エラー時はセッションをクリア
   }
 }
 
