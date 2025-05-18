@@ -1,0 +1,135 @@
+//----------------------------------------------------
+// Markdown Content Styling (within #response-output)
+//----------------------------------------------------
+#response-output {
+  // または .response-area__output (HTMLクラス変更後)
+  max-width: 100%; // 親の幅に合わせる
+
+  // ここではネストを使って、#response-output 内の要素にスタイルを適用
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin-top: $spacing-lg * 1.2; // 少し大きめ
+    margin-bottom: $spacing-md * 0.8;
+    font-weight: $font-weight-semibold;
+    line-height: $line-height-heading;
+    color: $color-text-heading;
+    padding-bottom: $spacing-xs * 1.5;
+    border-bottom: 1px solid $color-border-markdown;
+    &:first-child {
+      margin-top: $spacing-sm;
+    } // 最初の見出しの上マージン調整
+  }
+  h1 {
+    font-size: $font-size-h1;
+  }
+  h2 {
+    font-size: $font-size-h2;
+  }
+  h3 {
+    font-size: $font-size-h3;
+  }
+  // h4, h5, h6 も同様に
+
+  p {
+    line-height: $line-height-base * 1.1; // 少しゆったり
+    margin-top: 0;
+    margin-bottom: $spacing-md;
+  }
+
+  ul,
+  ol {
+    margin-top: 0;
+    margin-bottom: $spacing-md;
+    padding-left: $spacing-lg * 1.2; // インデント少し深め
+  }
+
+  li {
+    margin-bottom: $spacing-xs;
+    p {
+      // リストアイテム内の段落
+      margin-bottom: $spacing-xs; // マージンを小さく
+    }
+  }
+
+  pre {
+    background-color: $color-bg-code-block;
+    padding: $spacing-md;
+    border-radius: $border-radius-base;
+    overflow: auto; // コードが長い場合はスクロール
+    line-height: $line-height-code-block;
+    margin-bottom: $spacing-md;
+    font-size: $font-size-small; // コードブロック内のフォントサイズ調整
+  }
+
+  code {
+    // インラインコードとpre内のコード共通
+    font-family: $font-family-code;
+    background-color: $color-bg-inline-code;
+    padding: 0.2em 0.4em;
+    margin: 0;
+    font-size: 85%; // 親のフォントサイズに対する割合
+    border-radius: 3px;
+  }
+
+  pre > code {
+    // コードブロック内のcodeタグは背景とpaddingをリセット
+    padding: 0;
+    margin: 0;
+    font-size: inherit; // preのフォントサイズを継承
+    background-color: transparent;
+    border: 0;
+    white-space: pre-wrap; // 長い行も折り返す (任意)
+    word-break: break-all; // 強制的に改行 (任意)
+  }
+
+  strong {
+    font-weight: $font-weight-bold;
+  }
+  em {
+    font-style: italic;
+  }
+
+  blockquote {
+    margin: 0 0 $spacing-md 0;
+    padding: 0 $spacing-md;
+    color: $color-text-subtle;
+    border-left: 0.25em solid $color-border-base; // 少し薄いボーダー
+  }
+
+  hr {
+    height: 0.25em;
+    padding: 0;
+    margin: $spacing-xl 0;
+    background-color: $color-border-markdown;
+    border: 0;
+  }
+
+  table {
+    border-collapse: collapse;
+    margin-bottom: $spacing-md;
+    display: block; // レスポンシブテーブルのため
+    width: 100%;
+    overflow: auto; // テーブルがはみ出す場合はスクロール
+  }
+  th,
+  td {
+    padding: $spacing-sm $spacing-md;
+    border: 1px solid $color-border-markdown;
+  }
+  tr {
+    background-color: $color-bg-content; // テーブル行の背景
+    border-top: 1px solid darken($color-border-markdown, 5%);
+    &:nth-child(2n) {
+      background-color: lighten($color-bg-code-block, 2%); // 交互の行の背景
+    }
+  }
+  th {
+    // テーブルヘッダー
+    font-weight: $font-weight-semibold;
+    background-color: lighten($color-bg-code-block, 1%);
+  }
+}

@@ -1,0 +1,161 @@
+//----------------------------------------------------
+// Modal Window
+//----------------------------------------------------
+.modal {
+  display: none;
+}
+.modal.is-open {
+  display: block; /* Micromodalがこのクラスを付けて表示する */
+  /* または display: flex; (overlayで中央寄せする場合) */
+}
+.modal__overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6); /* 背景のオーバーレイ */
+  display: flex; /* これが効いていないと中央に来ない */
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* 他の要素より手前に */
+}
+.modal__container {
+  background-color: #fff;
+  padding: 20px;
+  max-width: 600px;
+  width: 90%;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  overflow-y: auto;
+  max-height: 90vh;
+  /* z-index や position が他の要素との関係で問題を起こしていないか確認 */
+}
+
+.modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: $spacing-md;
+  border-bottom: 1px solid $color-border-base;
+  margin-bottom: $spacing-lg;
+
+  .modal__title {
+    // または #modal-settings-title
+    margin: 0;
+    font-size: $font-size-large * 1.1;
+    font-weight: $font-weight-semibold;
+  }
+  // バツボタンのスタイルは _buttons.scss で .modal__close として定義するか、ここに書く
+}
+
+.modal__content {
+  margin-bottom: $spacing-lg;
+  line-height: $line-height-base;
+
+  // --- Modal Tabs ---
+  .modal-tabs {
+    display: flex;
+    margin-bottom: $spacing-lg;
+    border-bottom: 1px solid $color-border-base;
+  }
+  .tab-item {
+    padding: $spacing-sm $spacing-md;
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-size: $font-size-base;
+    color: $color-text-base;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    transition: $transition-base;
+    &:hover {
+      background-color: lighten($color-bg-body, 2%);
+    }
+    &.active-tab {
+      font-weight: $font-weight-semibold;
+      color: $color-primary;
+      border-bottom-color: $color-primary;
+    }
+  }
+  .tab-content {
+    display: none;
+    padding: $spacing-md 0 0 0; // タブの下に少し余白
+    &.active-tab-content {
+      display: block;
+    }
+  }
+
+  // --- Modal Forms ---
+  label {
+    // モーダル内の共通ラベルスタイル
+    display: block;
+    font-weight: $font-weight-medium;
+    margin-bottom: $spacing-xs;
+    color: $color-text-subtle;
+    font-size: $font-size-small;
+  }
+
+  input[type="text"],
+  input[type="password"],
+  textarea {
+    // モーダル内の汎用入力欄スタイル
+    width: 100%; // 親要素に合わせる (HTMLのstyle="width:98%"を上書き)
+    padding: $spacing-sm $spacing-md;
+    border: 1px solid $color-border-input;
+    border-radius: $border-radius-base;
+    font-size: $font-size-base * 0.9; // 少し小さめ
+    line-height: $line-height-base;
+    box-sizing: border-box;
+    margin-top: $spacing-xs;
+    transition: $transition-base;
+
+    &:focus,
+    &:focus-visible {
+      outline: none;
+      border-color: $color-primary;
+      box-shadow: 0 0 0 2px rgba($color-primary, 0.25);
+    }
+  }
+
+  // ラジオボタン周りのスタイル
+  #basic-settings-content > div:first-of-type {
+    // 「あなたのレベルは？」の後のdiv
+    margin-bottom: $spacing-lg;
+    label {
+      // ラジオボタンのラベル
+      display: inline-block;
+      margin-right: $spacing-md;
+      font-weight: $font-weight-normal;
+      color: $color-text-base;
+      cursor: pointer;
+      font-size: $font-size-base * 0.9;
+      input[type="radio"] {
+        margin-right: $spacing-xs * 0.5;
+        cursor: pointer;
+      }
+    }
+  }
+
+  // モーダル内の textarea 特有のスタイル (user-level-text, modal-additional-prompt)
+  textarea#user-level-text,
+  textarea#modal-additional-prompt-input {
+    resize: vertical; // 縦方向のみリサイズ可
+    min-height: $spacing-unit * 10; // 約4-5行分
+  }
+
+  // APIキー入力欄下の説明文など
+  p {
+    font-size: $font-size-smaller;
+    color: $color-text-subtle;
+    margin-top: $spacing-xs;
+    margin-bottom: 0; // デフォルトのpのマージンをリセットすることが多い
+  }
+}
+
+.modal__footer {
+  padding-top: 15px; /* 上のコンテンツとの間隔 */
+  border-top: 1px solid #e0e0e0; /* 区切り線 */
+  text-align: right; /* ボタンを右寄せ */
+  margin-top: 20px; /* コンテンツとのマージン */
+}

@@ -42,7 +42,6 @@ let currentTurns = []; //現在の会話のターンを保持する配列
 document.addEventListener("DOMContentLoaded", async () => {
   initializeSettings(); // settings.js の初期化を呼ぶ
   ui.initializeUI(); // ui.js のUI初期化を呼ぶ
-  ui.initializeTextareaAutoHeight(urlTextarea, 1);
   ui.initializeTextareaAutoHeight(
     document.getElementById("additional-question-input"),
     1

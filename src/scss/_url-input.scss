@@ -1,0 +1,71 @@
+//----------------------------------------------------
+// URL Input Section (#url-input-section)
+//----------------------------------------------------
+#url-input-section {
+  // または .url-input-section (HTMLクラス変更後)
+  &.active {
+    // .page-section.active の display:flex; flex-direction:column; を継承・利用
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    // padding: $spacing-xl; // _main-content.scss の .main-content-column のpaddingで代替も可
+  }
+
+  .url-input-title {
+    // または .url-input-section__title
+    font-size: 3.2em;
+    font-weight: $font-weight-semibold;
+    text-align: center;
+    margin-top: -20vh;
+    margin-bottom: $spacing-xl;
+    color: $color-text-heading;
+
+    .ai-red {
+      color: $color-accent-ai;
+    }
+  }
+
+  .input-form-container {
+    // または .url-input-section__form-container
+    position: relative; // 送信ボタンの絶対配置のため
+    width: 80%;
+    max-width: 700px;
+
+    // URL入力用textareaのスタイル (汎用クラス .url-textarea のスタイルは _forms.scss にある想定)
+    // ここでは #url-input に特有の調整や、もし .url-textarea を使わない場合の詳細スタイルを記述
+    #url-input {
+      // .url-input-section__textarea
+      // _forms.scss の .url-textarea のスタイルをここに移動・統合する
+      width: 100%;
+      min-height: calc(#{$line-height-base} * 1em * 1 + #{$spacing-md} * 2);
+      padding: $spacing-md ($spacing-xl + $spacing-lg) $spacing-md $spacing-lg; // 右パディングをボタン幅分確保
+      border-radius: $border-radius-pill;
+      border: 1px solid $color-border-input;
+      font-size: $font-size-base;
+      line-height: $line-height-base;
+      resize: none;
+      overflow-y: auto;
+      max-height: 12em;
+      transition: $transition-base;
+
+      &:focus,
+      &:focus-visible {
+        outline: none;
+        border-color: $color-primary;
+        box-shadow: 0 0 0 3px rgba($color-primary, 0.3);
+      }
+      &::placeholder {
+        color: lighten($color-text-base, 40%);
+        opacity: 1;
+      }
+    }
+
+    // 送信ボタンの配置 (ボタン自体のスタイルは _buttons.scss)
+    .custom-submit-button {
+      // .url-input-section__submit-button
+      position: absolute;
+      right: $spacing-md - 2px; // textareaのpaddingに合わせて調整
+      bottom: $spacing-md - 2px; // textareaのpaddingに合わせて調整
+    }
+  }
+}

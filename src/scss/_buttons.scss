@@ -1,0 +1,100 @@
+//--------------------------------------------------------------------------
+// Custom Submit Button (URL入力、追加質問用)
+//--------------------------------------------------------------------------
+.custom-submit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center; // テキストとショートカットキーを中央揃え
+  background-color: $color-primary;
+  color: $color-text-white;
+  border: 1px solid $color-primary; // 枠線も同色に
+  padding: 0; // ボタン内部の余白は子要素で調整
+  border-radius: $border-radius-pill;
+  cursor: pointer;
+  font-size: $font-size-small;
+  font-weight: $font-weight-medium;
+  line-height: 1; // ボタン内のテキストの行の高さをリセット
+  overflow: hidden;
+  transition: $transition-base; // background-color だけでなく、他の変化もスムーズに
+  height: 40px; // 固定の高さ
+  min-width: 100px; // 最小幅
+  user-select: none;
+  text-decoration: none; // aタグとして使う場合も考慮
+
+  &:hover {
+    background-color: darken($color-primary, 8%); // 少し濃くする
+    border-color: darken($color-primary, 8%);
+  }
+
+  &:focus-visible {
+    // キーボードフォーカス時のスタイル
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba($color-primary, 0.3);
+  }
+
+  .submit-text {
+    padding: 0 $spacing-sm 0 $spacing-md; // 左右のパディング
+    // line-height は親から継承されるので不要な場合も
+  }
+
+  .shortcut-key {
+    padding: 0 $spacing-md 0 $spacing-sm;
+    font-size: $font-size-small;
+    color: $color-text-white;
+    display: flex;
+    align-items: center;
+  }
+}
+
+//--------------------------------------------------------------------------
+// Modal Buttons
+//--------------------------------------------------------------------------
+.modal__btn {
+  padding: $spacing-sm $spacing-md;
+  border-radius: $border-radius-base;
+  border: 1px solid $color-border-input; // 通常ボタンのボーダー
+  background-color: $color-bg-body; // 通常ボタンの背景
+  color: $color-text-base;
+  font-size: $font-size-small * 1.05; // 少しだけ大きく
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  margin-left: $spacing-sm;
+  transition: $transition-base;
+  text-decoration: none;
+  line-height: 1.2;
+  outline: none;
+
+  &:hover {
+    background-color: darken($color-bg-body, 5%);
+    border-color: darken($color-border-input, 10%);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+  }
+
+  &.modal__btn-primary {
+    background-color: $color-primary;
+    color: $color-text-white;
+    border-color: $color-primary;
+
+    &:hover {
+      background-color: darken($color-primary, 8%);
+      border-color: darken($color-primary, 8%);
+    }
+    &:focus-visible {
+      outline-color: darken($color-primary, 8%);
+    }
+  }
+
+  &:disabled,
+  &.disabled {
+    // disabled属性または.disabledクラス
+    background-color: lighten($color-bg-body, 2%);
+    color: lighten($color-text-base, 20%);
+    border-color: lighten($color-border-input, 5%);
+    cursor: not-allowed;
+  }
+}
