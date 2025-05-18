@@ -1,0 +1,97 @@
+// src/scss/_variables.scss
+
+//--------------------------------------------------------------------------
+// Colors
+//--------------------------------------------------------------------------
+$color-primary: #0366d6; // メインの青色 (ボタン、リンクなど)
+$color-secondary: #005cc5; // プライマリ色のホバー時など
+$color-accent-ai: #cb2431; // "AI"の文字の赤色
+
+$color-text-base: #333; // 基本の文字色
+$color-text-heading: #24292e; // 見出しの文字色
+$color-text-subtle: #586069; // やや薄い文字色 (履歴のタイムスタンプなど)
+$color-text-link: $color-primary; // リンク色
+$color-text-white: #ffffff; // 白色の文字
+
+$color-bg-body: #f6f8fc; // ページ全体の背景色
+$color-bg-header: #ffffff; // ヘッダーの背景色
+$color-bg-content: #ffffff; // 中央コンテンツの背景色
+$color-bg-user-message: #dcf8c6; // ユーザーメッセージの吹き出し背景
+$color-bg-model-message: #ffffff; // モデルメッセージの吹き出し背景
+$color-bg-code-block: #f6f8fa; // コードブロックの背景
+$color-bg-inline-code: rgba(27, 31, 35, 0.05); // インラインコードの背景
+
+$color-border-base: #e0e0e0; // 基本の境界線色
+$color-border-markdown: #eaecef; // マークダウン内の境界線
+$color-border-input: #d1d5da; // 入力欄のボーダー
+$color-border-modal-message: #ccc; // モデルメッセージの吹き出しボーダー
+
+$color-error: red; // エラーメッセージや必須マーク
+$color-success: green; // 成功メッセージ (もしあれば)
+
+//--------------------------------------------------------------------------
+// Typography
+//--------------------------------------------------------------------------
+$font-family-base:
+  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+  sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+$font-family-code:
+  "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+
+$font-size-base: 16px; // 基本のフォントサイズ (htmlやbodyに設定)
+$font-size-small: 0.85em; // 小さめの文字
+$font-size-smaller: 0.8em; // さらに小さめ
+$font-size-large: 1.1em; // 大きめの文字
+$font-size-h1: 2em; // h1のサイズ (マークダウン内など)
+$font-size-h2: 1.7em; // h2のサイズ
+$font-size-h3: 1.4em; // h3のサイズ
+$font-size-logo: 1.8em; // アプリロゴのサイズ
+
+$line-height-base: 1.5;
+$line-height-heading: 1.25;
+$line-height-code-block: 1.45;
+
+$font-weight-normal: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600; // やや太字 (見出しや強調など)
+$font-weight-bold: 700; // 太字
+
+//--------------------------------------------------------------------------
+// Layout & Spacing
+//--------------------------------------------------------------------------
+$app-header-height: 60px;
+$sidebar-width: 16%;
+$chat-input-area-min-height: 40px; // textarea1行分の高さに合わせる
+
+$spacing-unit: 8px; // 基本のスペーシング単位
+$spacing-xs: $spacing-unit * 0.5; // 4px
+$spacing-sm: $spacing-unit; // 8px
+$spacing-md: $spacing-unit * 2; // 16px
+$spacing-lg: $spacing-unit * 3; // 24px
+$spacing-xl: $spacing-unit * 4; // 32px
+
+$border-radius-base: 6px; // 基本の角丸
+$border-radius-large: 15px; // 大きめの角丸 (メインコンテンツカラムなど)
+$border-radius-pill: 30px; // 丸薬型の角丸 (textareaなど)
+$border-radius-circle: 50%; // 円形
+
+//--------------------------------------------------------------------------
+// Z-index
+//--------------------------------------------------------------------------
+$z-index-modal-overlay: 1000;
+$z-index-modal-container: 1001; // オーバーレイより手前
+// ... 他にz-index管理が必要なものがあれば
+
+//--------------------------------------------------------------------------
+// Transitions
+//--------------------------------------------------------------------------
+$transition-base: all 0.2s ease-in-out; // 基本のトランジション
+
+//--------------------------------------------------------------------------
+// Other
+//--------------------------------------------------------------------------
+// 例えば、レスポンシブ対応のためのブレークポイント
+// $breakpoint-sm: 576px;
+// $breakpoint-md: 768px;
+// $breakpoint-lg: 992px;
+// $breakpoint-xl: 1200px;
