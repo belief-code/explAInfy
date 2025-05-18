@@ -1,0 +1,167 @@
+// 履歴リストのスタイル
+#history-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1; /* 残りのスペースを全て使う */
+  overflow-y: auto; /* ここでスクロールを有効にする */
+  min-height: 0; /* flexアイテムが縮みすぎるのを防ぐ */
+  max-height: 100%;
+
+  li {
+    margin-bottom: 0; // リストアイテム間のマージンは a タグの padding で調整
+
+    a {
+      display: block;
+      padding: $spacing-sm $spacing-xs; // 上下は少し、左右は控えめに
+      text-decoration: none;
+      color: $color-text-link;
+      font-size: $font-size-small;
+      border-radius: $border-radius-base * 0.5; // 少しだけ角丸
+      transition:
+        background-color 0.15s ease-out,
+        color 0.15s ease-out; // ホバー効果のため
+
+      &:hover {
+        text-decoration: none; // ホバー時も下線なしにするなら
+      }
+
+      // 選択中の履歴アイテムに .active クラスを付ける
+      &.active {
+        background-color: rgba($color-primary, 0.15);
+        font-weight: $font-weight-medium;
+      }
+
+      .history-title {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: $font-weight-medium; // 通常時も少し太字に
+        margin-bottom: $spacing-xs * 0.5; // タイムスタンプとの間隔
+      }
+
+      .history-timestamp {
+        display: block;
+        font-size: $font-size-smaller;
+        color: $color-text-subtle;
+      }
+    }
+  }
+}
+
+.history-item {
+  position: relative; // ポップアップの位置決めの基準にするため
+  display: flex; // リンクとメニューボタンを横並びにする
+  align-items: center;
+  border-radius: $border-radius-base;
+
+  &:hover {
+    background-color: rgba($color-primary, 0.08); // 薄いプライマリ色
+    color: darken($color-text-link, 5%);
+    text-decoration: none; // ホバー時も下線なしにするなら
+  }
+  &:hover .history-item-menu-button {
+    // ホバーでメニューボタンを表示
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.history-link {
+  // 既存の a タグのスタイルを少し調整
+  flex-grow: 1; // 利用可能な幅を全て使う
+  min-width: 0;
+}
+
+.history-item-menu-button {
+  background: none;
+  border: none;
+  padding: $spacing-xs;
+  margin-left: $spacing-xs; // リンクとの間に少しスペース
+  cursor: pointer;
+  opacity: 0; // 通常は非表示
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease-in-out,
+    visibility 0.2s ease-in-out;
+  color: $color-text-subtle;
+  flex-shrink: 0; // ボタンが縮まないように
+
+  svg {
+    display: block; // SVGの余白対策
+    width: 18px; // アイコンサイズ調整
+    height: 18px;
+  }
+  &:hover {
+    color: $color-text-base;
+  }
+  // &.active のスタイル (ポップアップ表示中など)
+}
+
+.history-item-popup {
+  position: absolute;
+  background-color: $color-bg-content; // 白背景
+  border: 1px solid $color-border-base;
+  border-radius: $border-radius-base * 3;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10; // 他の履歴アイテムより手前に
+  min-width: 120px; // ポップアップの最小幅
+  right: 7px;
+
+  ul {
+    list-style: none;
+    padding: $spacing-xs 0;
+    margin: 0;
+    li {
+      button {
+        display: block;
+        width: 100%;
+        padding: $spacing-sm $spacing-md;
+        text-align: left;
+        background-color: transparent; // 通常時は完全に透明にする
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-size: $font-size-small;
+        color: $color-text-base;
+        border-radius: $border-radius-base;
+        position: relative;
+        overflow: hidden;
+        transition: color 0.15s ease-out; // 背景と影は::beforeで制御するので、ここではcolorのみ
+        // 通常ボタンのホバー (削除ボタン以外)
+        &:not(.popup-delete-button):hover {
+          background-color: lighten($color-bg-body, 2%);
+        }
+
+        // 削除ボタン特有のスタイル
+        &.popup-delete-button {
+          color: $color-error;
+          // 通常時の背景やボーダーは汎用ボタンスタイルから継承 (またはここで上書き)
+
+          &::before {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 6px;
+            right: 6px;
+            bottom: 2px;
+            background-color: rgba($color-error, 0); // 初期は完全に透明な赤
+            border-radius: $border-radius-base * 2;
+            opacity: 1; // 最初からopacityは1にしておく
+            transition: background-color 0.15s ease-out;
+          }
+
+          &:hover {
+            color: darken($color-error, 10%);
+            // ボタン本体の背景やボーダーは変えないか、あるいは枠線だけ赤くする
+            // border-color: lighten($color-error, 20%);
+
+            &::before {
+              background-color: rgba($color-error, 0.08);
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -46,7 +46,14 @@
           </section>
           <!-- 応答画面 -->
           <section id="response-section" class="page-section">
-            <h2 id="response-title">説明結果</h2>
+            <a
+              href="#"
+              id="response-title-link"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <h2 id="response-title">説明結果</h2>
+            </a>
             <div class="response-content-wrapper">
               <div id="response-output">
                 <!-- ここに説明結果が表示される -->
@@ -165,6 +172,24 @@
                 />
                 <p style="font-size: 0.8em; color: #666">
                   APIキーはブラウザのローカルストレージに保存されます。
+                </p>
+              </div>
+              <div style="margin-top: 15px">
+                <label for="modal-gemini-model-input">Gemini モデル名:</label>
+                <input
+                  type="text"
+                  id="modal-gemini-model-input"
+                  style="width: 98%"
+                  placeholder="例: gemini-2.5-flash-preview-04-17"
+                />
+                <p style="font-size: 0.8em; color: #666">
+                  使用したいGeminiモデル名を入力してください。空の場合はデフォルトモデルが使用されます。
+                  <a
+                    href="https://ai.google.dev/models/gemini"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >(利用可能なモデル)</a
+                  >
                 </p>
               </div>
               <div style="margin-top: 15px">

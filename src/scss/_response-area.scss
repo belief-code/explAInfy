@@ -18,6 +18,27 @@
     flex-shrink: 0;
   }
 }
+#response-title-link {
+  // 新しいセレクタ
+  text-decoration: none; // リンクの下線を消す
+  color: inherit; // 親要素の文字色を継承 (h2の色になる)
+  display: block; // h2がブロック要素なので、aもブロックにしてクリック範囲を合わせる
+  margin-bottom: $spacing-lg; // response-content-wrapper との間の余白
+
+  &:hover {
+    text-decoration: underline; // ホバー時のみ下線を表示
+    color: $color-primary; // ホバー時にリンク色にする (任意)
+  }
+
+  h2#response-title {
+    margin: 0; // aタグでマージンを管理するので、h2自体のマージンはリセット
+    padding-bottom: $spacing-md;
+    border-bottom: 1px solid $color-border-base;
+    font-size: $font-size-h2 * 0.9;
+    // color: $color-text-heading; // 親のaから継承されるか、ここで指定
+    flex-shrink: 0;
+  }
+}
 
 .response-content-wrapper {
   // または .response-area__content-wrapper
