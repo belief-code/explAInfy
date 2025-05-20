@@ -1,5 +1,5 @@
 const SETTINGS_STORAGE_KEY = "ExplAInfySettings";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-preview-04-17";
+const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 
 // モジュール内のプライベートな状態として設定を保持
 let currentSettings = {
